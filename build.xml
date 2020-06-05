@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project default="jar" basedir=".">
+
+	<property name="srcDir" value="src" />
+	<property name="contribSrcDir" value="src_contrib" />
+	<property name="baseObjDir" value="obj" />
+	<property name="objDir" value="${baseObjDir}/main" />
+	<property name="binDir" value="./bin" />
+	<property name="jarFile" value="${binDir}/gridstore-jdbc.jar" />
+
+	<property name="callLoggingSrcDir" value="src_call_logging" />
+	<property name="callLoggingObjDir" value="${baseObjDir}/call_logging" />
+	<property name="callLoggingJarFile" value="${binDir}/gridstore-jdbc-call-logging.jar" />
+
+	<property name="srcEncoding" value="UTF-8" />
+
+	<target name="cleanObj">
+		<delete dir="${objDir}" failonerror="no" />
+	</target>
+
+	<target name="clean" depends="cleanObj">
+		<delete file="${jarFile}" failonerror="no" />
+	</target>
+
+	<target name="compile">
+		<mkdir dir="${objDir}"/>
+
+		<javac destdir="${objDir}"
+			encoding="${srcEncoding}" debug="yes" includeantruntime="no"
+			source="1.6" target="1.6">
+			<src path="${srcDir}"/>
+			<src path="${contribSrcDir}"/>
+		</javac>
+	</target>
+
+	<target name="callLoggingCompile" depends="compile">
+		<mkdir dir="${callLoggingObjDir}"/>
+
+		<javac destdir="${callLoggingObjDir}"
+			encoding="${srcEncoding}" debug="yes" includeantruntime="no"
+			source="1.6" target="1.6">
+			<classpath>
+				<pathelement location="${objDir}"/>
+				<path>
+					<fileset dir="./3rd_party/slf4j">
+						<include name="slf4j-api-*.jar" />
+					</fileset>
+				</path>
+			</classpath>
+			<src path="${callLoggingSrcDir}"/>
+		</javac>
+	</target>
+
+	<target name="mainJar" depends="compile">
+		<mkdir dir="${binDir}"/>
+
+		<jar destfile="${jarFile}">
+			<zipfileset dir="${objDir}" />
+			<zipfileset dir="${srcDir}" includes="META-INF/**" />
+			<zipfileset dir="${srcDir}" includes="**/*.properties" />
+		</jar>
+	</target>
+
+	<target name="callLoggingJar" depends="callLoggingCompile">
+		<mkdir dir="${binDir}"/>
+
+		<jar destfile="${callLoggingJarFile}">
+			<zipfileset dir="${callLoggingObjDir}" />
+		</jar>
+	</target>
+
+	<target name="jar" depends="mainJar,callLoggingJar">
+	</target>
+
+</project>
