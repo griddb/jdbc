@@ -46,10 +46,6 @@ public class LogProxy implements InvocationHandler {
 		try {
 			ret = method.invoke(target, args);
 		} catch (InvocationTargetException e) {
-			// JDBCがクライアント側に投げるとマニュアル上明記しているのはSQLFeatureNotSupportedExceptionとSQLException
-			// SQLFeatureNotSupportedException、SQLExceptionが発生した場合、
-			// getCause()よりSQLFeatureNotSupportedException、SQLExceptionが取得できる
-			// それ以外のRuntimeExceptionが発生した場合も含め、getCause()より取得した例外をthrowする
 			logger.trace("An exception was thrown.", e);
 			Throwable cause = e.getCause();
 			if (cause != null) {
@@ -78,7 +74,6 @@ public class LogProxy implements InvocationHandler {
 		Class<?> returnType = method.getReturnType();
 		boolean isReturnTypeVoid = Void.TYPE.equals(returnType);
 
-		// メソッドの戻り値の型がvoidではない場合は戻り値のログを出す
 		if (!isReturnTypeVoid) {
 			outputReturn(ret);
 		}
@@ -103,18 +98,14 @@ public class LogProxy implements InvocationHandler {
 	}
 
 	private boolean isOutputTraceMethod(Method method) {
-		// traceログ出力対象外のメソッドの場合falseを返す
 		boolean ret = true;
 		if (METHOD_NAME_TOSTRING.equals(method.getName())) {
-			// toString()はtraceログ出力対象外とする
 			ret = false;
 		}
 		return ret;
 	}
 
 	private String getShortClassName(Object obj) {
-		// JDBCトレースログに出力するパスを省略したクラス名を返す
-		// getSimpleName() で得られる名前を返す
 		String retStr = obj.getClass().getSimpleName();
 		return retStr;
 	}
