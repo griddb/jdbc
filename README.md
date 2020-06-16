@@ -34,8 +34,8 @@ GridDB server need to be started in advance with "myCluster" as a cluster name a
 
 ## Document
   Refer to the file below for more detailed information.  
-  - [JDBC Driver UserGuide](http://griddb.github.io/docs-en/manuals/GridDB_JDBC_Driver_UserGuide.html)
-  - [SQL Reference](http://griddb.github.io/docs-en/manuals/GridDB_SQL_Reference.html)
+  - [JDBC Driver UserGuide](https://github.com/griddb/docs-en/blob/master/manuals/GridDB_JDBC_Driver_UserGuide.md)
+  - [SQL Reference](https://github.com/griddb/docs-en/blob/master/manuals/GridDB_SQL_Reference.md)
 
 ## Community
   * Issues  

@@ -32,8 +32,8 @@ GridDBJBCドライバはSQLインタフェースを提供します。
 
 ## ドキュメント
   詳細は以下のドキュメントを参照してください。
-  - [JDBCドライバ説明書](http://griddb.github.io/docs-ja/manuals/GridDB_JDBC_Driver_UserGuide.html)
-  - [SQLリファレンス](http://griddb.github.io/docs-ja/manuals/GridDB_SQL_Reference.html)
+  - [JDBCドライバ説明書](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_JDBC_Driver_UserGuide/toc.md)
+  - [SQLリファレンス](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_SQL_Reference/toc.md)
 
 ## コミュニティ
   * Issues  
