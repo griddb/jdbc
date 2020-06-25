@@ -4,6 +4,9 @@ GridDB JDBC Driver
 
 The GridDB JDBC Driver provides a SQL interface for GridDB.  
 
+(Additional information)  
+There is [Jar Package for GridDB V4.5 CE on Maven Central Repository](https://search.maven.org/search?q=a:gridstore-jdbc) .
+
 ## Operating environment
 
 Building and program execution are checked in the environment below.

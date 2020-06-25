@@ -1,47 +1,50 @@
-GridDB JDBCƒhƒ‰ƒCƒo
+GridDB JDBCãƒ‰ãƒ©ã‚¤ãƒ
 
-## ŠT—v
+## æ¦‚è¦
 
-GridDBJBCƒhƒ‰ƒCƒo‚ÍSQLƒCƒ“ƒ^ƒtƒF[ƒX‚ğ’ñ‹Ÿ‚µ‚Ü‚·B  
+GridDBJBCãƒ‰ãƒ©ã‚¤ãƒã¯SQLã‚¤ãƒ³ã‚¿ãƒ•ã‚§ãƒ¼ã‚¹ã‚’æä¾›ã—ã¾ã™ã€‚  
 
-## “®ìŠÂ‹«
+(è¿½åŠ æƒ…å ±)  
+[Maven Central Repositoryä¸Šã«GridDB V4.5 CEç”¨ã®Jarãƒ‘ãƒƒã‚±ãƒ¼ã‚¸](https://search.maven.org/search?q=a:gridstore-jdbc)ãŒã‚ã‚Šã¾ã™ã€‚
 
-ˆÈ‰º‚ÌŠÂ‹«‚ÅCƒNƒ‰ƒCƒAƒ“ƒg‚Ìƒrƒ‹ƒh‚ÆƒTƒ“ƒvƒ‹ƒvƒƒOƒ‰ƒ€‚ÌÀs‚ğŠm”F‚µ‚Ä‚¢‚Ü‚·B
+## å‹•ä½œç’°å¢ƒ
+
+ä»¥ä¸‹ã®ç’°å¢ƒã§Cã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ“ãƒ«ãƒ‰ã¨ã‚µãƒ³ãƒ—ãƒ«ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®å®Ÿè¡Œã‚’ç¢ºèªã—ã¦ã„ã¾ã™ã€‚
 
     OS: CentOS 7.6(x64)
     GridDB server: V4.5 CE(Community Edition)
 
-## ƒNƒCƒbƒNƒXƒ^[ƒg
+## ã‚¯ã‚¤ãƒƒã‚¯ã‚¹ã‚¿ãƒ¼ãƒˆ
 
-### ƒrƒ‹ƒh
+### ãƒ“ãƒ«ãƒ‰
 
     $ ant
     
-‚ğÀs‚·‚é‚ÆAbinƒtƒHƒ‹ƒ_‚Ì‰º‚ÉˆÈ‰º‚Ìƒtƒ@ƒCƒ‹‚âƒŠƒ“ƒN‚ªì¬‚³‚ê‚Ü‚·B
+ã‚’å®Ÿè¡Œã™ã‚‹ã¨ã€binãƒ•ã‚©ãƒ«ãƒ€ã®ä¸‹ã«ä»¥ä¸‹ã®ãƒ•ã‚¡ã‚¤ãƒ«ã‚„ãƒªãƒ³ã‚¯ãŒä½œæˆã•ã‚Œã¾ã™ã€‚
 
     gridstore-jdbc.jar
     gridstore-jdbc-call-logging.jar
 
-### ƒTƒ“ƒvƒ‹ƒvƒƒOƒ‰ƒ€‚ÌÀs
-ƒNƒ‰ƒXƒ^–¼umyClustervAƒ}ƒ‹ƒ`ƒNƒ‰ƒXƒ^•û®‚ğg‚Á‚ÄA–‘O‚ÉGridDBƒT[ƒo‚ğ‹N“®‚µ‚Ä‚¨‚­•K—v‚ª‚ ‚è‚Ü‚·B
+### ã‚µãƒ³ãƒ—ãƒ«ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®å®Ÿè¡Œ
+ã‚¯ãƒ©ã‚¹ã‚¿åã€ŒmyClusterã€ã€ãƒãƒ«ãƒã‚¯ãƒ©ã‚¹ã‚¿æ–¹å¼ã‚’ä½¿ã£ã¦ã€äº‹å‰ã«GridDBã‚µãƒ¼ãƒã‚’èµ·å‹•ã—ã¦ãŠãå¿…è¦ãŒã‚ã‚Šã¾ã™ã€‚
 
     $ export CLASSPATH=${CLASSPATH}:./bin/gridstore-jdbc.jar
     $ cp sample/ja/jdbc/JDBCSelect.java .
     $ javac JDBCSelect.java
     $ java JDBCSelect
 
-## ƒhƒLƒ…ƒƒ“ƒg
-  Ú×‚ÍˆÈ‰º‚ÌƒhƒLƒ…ƒƒ“ƒg‚ğQÆ‚µ‚Ä‚­‚¾‚³‚¢B
-  - [JDBCƒhƒ‰ƒCƒoà–¾‘](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_JDBC_Driver_UserGuide/toc.md)
-  - [SQLƒŠƒtƒ@ƒŒƒ“ƒX](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_SQL_Reference/toc.md)
+## ãƒ‰ã‚­ãƒ¥ãƒ¡ãƒ³ãƒˆ
+  è©³ç´°ã¯ä»¥ä¸‹ã®ãƒ‰ã‚­ãƒ¥ãƒ¡ãƒ³ãƒˆã‚’å‚ç…§ã—ã¦ãã ã•ã„ã€‚
+  - [JDBCãƒ‰ãƒ©ã‚¤ãƒèª¬æ˜æ›¸](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_JDBC_Driver_UserGuide/toc.md)
+  - [SQLãƒªãƒ•ã‚¡ãƒ¬ãƒ³ã‚¹](https://github.com/griddb/docs-ja/blob/master/manuals/GridDB_SQL_Reference/toc.md)
 
-## ƒRƒ~ƒ…ƒjƒeƒB
+## ã‚³ãƒŸãƒ¥ãƒ‹ãƒ†ã‚£
   * Issues  
-    ¿–âA•s‹ï‡•ñ‚Íissue‹@”\‚ğ‚²—˜—p‚­‚¾‚³‚¢B
+    è³ªå•ã€ä¸å…·åˆå ±å‘Šã¯issueæ©Ÿèƒ½ã‚’ã”åˆ©ç”¨ãã ã•ã„ã€‚
   * PullRequest  
-    GridDB Contributor License Agreement(CLA_rev1.1.pdf)‚É“¯ˆÓ‚µ‚Ä’¸‚­•K—v‚ª‚ ‚è‚Ü‚·B
-    PullRequest‹@”\‚ğ‚²—˜—p‚Ìê‡‚ÍGridDB Contributor License Agreement‚É“¯ˆÓ‚µ‚½‚à‚Ì‚Æ‚İ‚È‚µ‚Ü‚·B
+    GridDB Contributor License Agreement(CLA_rev1.1.pdf)ã«åŒæ„ã—ã¦é ‚ãå¿…è¦ãŒã‚ã‚Šã¾ã™ã€‚
+    PullRequestæ©Ÿèƒ½ã‚’ã”åˆ©ç”¨ã®å ´åˆã¯GridDB Contributor License Agreementã«åŒæ„ã—ãŸã‚‚ã®ã¨ã¿ãªã—ã¾ã™ã€‚
 
-## ƒ‰ƒCƒZƒ“ƒX
-  CƒNƒ‰ƒCƒAƒ“ƒg‚Ìƒ‰ƒCƒZƒ“ƒX‚ÍApache License, version 2.0‚Å‚·B  
-  ƒT[ƒhƒp[ƒeƒB‚Ìƒ\[ƒX‚Æƒ‰ƒCƒZƒ“ƒX‚É‚Â‚¢‚Ä‚Í3rd_party/3rd_party.md‚ğQÆ‚­‚¾‚³‚¢B
+## ãƒ©ã‚¤ã‚»ãƒ³ã‚¹
+  Cã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ãƒ©ã‚¤ã‚»ãƒ³ã‚¹ã¯Apache License, version 2.0ã§ã™ã€‚  
+  ã‚µãƒ¼ãƒ‰ãƒ‘ãƒ¼ãƒ†ã‚£ã®ã‚½ãƒ¼ã‚¹ã¨ãƒ©ã‚¤ã‚»ãƒ³ã‚¹ã«ã¤ã„ã¦ã¯3rd_party/3rd_party.mdã‚’å‚ç…§ãã ã•ã„ã€‚
