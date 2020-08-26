@@ -243,7 +243,7 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 			throw SQLErrorUtils.error(0, null, e);
 		}
 
-		rowList.add(activeRow);
+		rowList.add(newRow);
 		parameterAssignmentSet.clear();
 		activeRow = newRow;
 	}
@@ -637,7 +637,10 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 			throw SQLErrorUtils.error(0, null, e);
 		}
 
-		final Row activeRow = rowList.get(rowList.size() - 1);
+		final boolean inputCompleted =
+				(this.activeRow == null && this.rowList != null);
+		final Row activeRow = (inputCompleted ?
+				null : rowList.get(rowList.size() - 1));
 		final BitSet parameterAssignmentSet =
 				(this.parameterAssignmentSet == null ?
 						new BitSet(parameterCount) :
@@ -647,7 +650,6 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		this.parameterCount = parameterCount;
 		this.mapper = mapper;
 		this.containerInfo = containerInfo;
-		this.rowList = rowList;
 		this.parameterAssignmentSet = parameterAssignmentSet;
 		this.activeRow = activeRow;
 
@@ -683,18 +685,29 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		return destList;
 	}
 
+	@Override
+	protected void completeInputTable() throws SQLException {
+		checkParameterUnassigned();
+		activeRow = null;
+	}
+
 	protected void putInputTable(BasicBuffer out) throws SQLException {
-		final boolean found = (rowList != null && !rowList.isEmpty());
+		final int baseRowCount = (rowList == null ? 0 : rowList.size());
+		final boolean inputCompleted = (activeRow == null);
+
+		final int rowCount = baseRowCount - (inputCompleted ? 1 : 0);
+		final boolean found = (rowCount > 0);
 		out.putBoolean(found);
 
 		if (!found) {
 			return;
 		}
 
-		checkParameterAssigned();
+		if (!inputCompleted) {
+			checkParameterAssigned();
+		}
 
 		try {
-			final int rowCount = rowList.size();
 			final int dummySize = 0;
 			{
 				out.putLong((long) rowCount);
@@ -739,6 +752,15 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		}
 	}
 
+	@Override
+	protected void clearInputTable() throws SQLException {
+		if (activeRow == null && rowList != null && !rowList.isEmpty()) {
+			activeRow = rowList.get(rowList.size() - 1);
+			rowList.clear();
+			rowList.add(activeRow);
+		}
+	}
+
 	private SQLException sqlAlteringError() {
 		return SQLErrorUtils.error(
 				SQLErrorUtils.ILLEGAL_STATE,
@@ -771,6 +793,17 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 					SQLErrorUtils.ILLEGAL_PARAMETER,
 					"Parameter is not assigned (" +
 					"parameterIndex=" + (unassignedPos + 1) +
+					", parameterCount=" + parameterCount + ")", null);
+		}
+	}
+
+	private void checkParameterUnassigned() throws SQLException {
+		final int assignedPos = parameterAssignmentSet.nextSetBit(0);
+		if (assignedPos >= 0) {
+			throw SQLErrorUtils.error(
+					SQLErrorUtils.ILLEGAL_PARAMETER,
+					"Batch not added while parameter is assigned (" +
+					"assignedParameterIndex=" + (assignedPos + 1) +
 					", parameterCount=" + parameterCount + ")", null);
 		}
 	}
