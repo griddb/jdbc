@@ -26,7 +26,7 @@ GridDBJBCドライバはSQLインタフェースを提供します。
     gridstore-jdbc-call-logging.jar
 
 ### サンプルプログラムの実行
-クラスタ名「myCluster」、マルチクラスタ方式を使って、事前にGridDBサーバを起動しておく必要があります。
+クラスタ名「myCluster」、マルチキャスト方式を使って、事前にGridDBサーバを起動しておく必要があります。
 
     $ export CLASSPATH=${CLASSPATH}:./bin/gridstore-jdbc.jar
     $ cp sample/ja/jdbc/JDBCSelect.java .
