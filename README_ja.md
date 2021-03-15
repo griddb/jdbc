@@ -12,7 +12,7 @@ GridDBJBCドライバはSQLインタフェースを提供します。
 以下の環境でCクライアントのビルドとサンプルプログラムの実行を確認しています。
 
     OS: CentOS 7.6(x64)
-    GridDB server: V4.5 CE(Community Edition)
+    GridDB server: V4.6 CE(Community Edition)
 
 ## クイックスタート
 
