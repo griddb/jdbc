@@ -42,7 +42,7 @@ class SQLStatement implements Statement, LaterStatement {
 	private static final RowMapper.Config DEFAULT_MAPPER_CONFIG =
 			new RowMapper.Config(true, true, true, false);
 
-	static boolean batchOperationSupported = true;
+	static boolean batchOperationSupported = false;
 
 	private final SQLConnection connection;
 
@@ -331,18 +331,12 @@ class SQLStatement implements Statement, LaterStatement {
 		}
 
 		checkOpened();
-		completeInputTable();
 
 		try {
-			execute(StatementOperation.EXECUTE, false);
+			execute(StatementOperation.EXECUTE, true);
 		}
 		finally {
-			try {
-				queryList.clear();
-			}
-			finally {
-				clearInputTable();
-			}
+			queryList.clear();
 		}
 
 		final int[] batchResult = new int[resultList.size()];
@@ -928,14 +922,8 @@ class SQLStatement implements Statement, LaterStatement {
 		}
 	}
 
-	protected void completeInputTable() throws SQLException {
-	}
-
 	protected void putInputTable(BasicBuffer out) throws SQLException {
 		out.putBoolean(false);
-	}
-
-	protected void clearInputTable() throws SQLException {
 	}
 
 	protected void setQueryDirect(String sql) throws SQLException {

@@ -45,6 +45,8 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,12 +57,17 @@ import java.util.SimpleTimeZone;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
+import javax.net.SocketFactory;
+import javax.net.ssl.SSLSocketFactory;
+
 import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.LoginInfo;
 import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.OptionalRequest;
+import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.SocketType;
 import com.toshiba.mwcloud.gs.sql.internal.PropertyUtils.WrappedProperties;
 import com.toshiba.mwcloud.gs.sql.internal.SQLLaterFeatures.LaterConnection;
 import com.toshiba.mwcloud.gs.sql.internal.SQLStatement.QueryPool;
 import com.toshiba.mwcloud.gs.sql.internal.SQLStatement.StatementOperation;
+import com.toshiba.mwcloud.gs.sql.internal.common.DriverProvider.TransportProvider;
 import com.toshiba.mwcloud.gs.sql.internal.proxy.ProxyTargetInstanceFactory;
 
 class SQLConnection implements Connection, LaterConnection {
@@ -72,6 +79,7 @@ class SQLConnection implements Connection, LaterConnection {
 	private static final int NOTIFICATION_STATEMENT_TYPE = 4000;
 
 	private static final String DEFAULT_SERVICE_TYPE = "sql";
+	private static final String DEFAULT_PUBLIC_SERVICE_TYPE = "sqlPublic";
 
 	private static final int PARTITION_ADDRESS_STATEMENT_TYPE =
 			NodeResolver.DEFAULT_PROTOCOL_CONFIG.getNormalStatementType(
@@ -116,6 +124,10 @@ class SQLConnection implements Connection, LaterConnection {
 	private static final String STORE_MEMORY_AGING_SWAP_RATE_NAME = "storeMemoryAgingSwapRate";
 
 	private static final String TIME_ZONE_NAME = "timeZone";
+
+	private static final String AUTHENTICATION_NAME = "authentication";
+
+	private static final String CONNECTION_ROUTE_NAME = "connectionRoute";
 
 	private static final long DEFAULT_LOGIN_TIMEOUT = 5 * 60 * 1000;
 
@@ -183,7 +195,8 @@ class SQLConnection implements Connection, LaterConnection {
 
 	private Map<String, String> remoteEnv;
 
-	SQLConnection(String url, Properties info) throws SQLException {
+	SQLConnection(String url, Properties info, Options options)
+			throws SQLException {
 		SQLErrorUtils.checkNullParameter(url, "url", null);
 		SQLErrorUtils.checkNullParameter(info, "info", null);
 
@@ -210,13 +223,17 @@ class SQLConnection implements Connection, LaterConnection {
 				new ServiceAddressResolver.Config();
 		List<InetSocketAddress> memberList =
 				new ArrayList<InetSocketAddress>();
-		addressList = getAddressList(gsURI, mergedInfo, sarConfig, memberList);
+		final InetAddress[] notificationInterfaceAddress =
+				new InetAddress[1];
+		addressList = getAddressList(
+				gsURI, mergedInfo, sarConfig, memberList,
+				notificationInterfaceAddress);
 		if (!addressList.isEmpty()) {
 			sarConfig = null;
 			memberList = null;
 		}
 
-		connectionConfig = new NodeConnection.Config();
+		connectionConfig = createConnectionConfig(mergedInfo, options);
 		connectionConfig.setAlternativeVersion(sqlProtocolVersion);
 
 		final String[] uriPath = parseURIPath(gsURI);
@@ -227,7 +244,9 @@ class SQLConnection implements Connection, LaterConnection {
 				userName, password, true, dbName, clusterName, -1,
 				resolveApplicationName(mergedInfo),
 				resolveStoreMemoryAgingSwapRate(mergedInfo),
-				resolveTimeZone(mergedInfo));
+				resolveTimeZone(mergedInfo),
+				resolveAuthType(mergedInfo),
+				resolveConnectionRoute(mergedInfo));
 		clusterInfo = new NodeResolver.ClusterInfo(loginInfo);
 
 		this.userName = userName;
@@ -259,6 +278,10 @@ class SQLConnection implements Connection, LaterConnection {
 			final NodeResolver.AddressConfig addressConfig =
 					new NodeResolver.AddressConfig();
 			addressConfig.serviceType = DEFAULT_SERVICE_TYPE;
+			if (loginInfo.isPublicConnection()) {
+				addressConfig.serviceType = DEFAULT_PUBLIC_SERVICE_TYPE;
+			}
+
 			addressConfig.alwaysMaster = true;
 
 			final boolean passive = (primaryAddress == null ? false :
@@ -267,7 +290,7 @@ class SQLConnection implements Connection, LaterConnection {
 				nodeResolver = new NodeResolver(
 						resolverConnections, passive, primaryAddress,
 						connectionConfig, sarConfig, memberList,
-						addressConfig);
+						addressConfig, notificationInterfaceAddress[0]);
 			}
 			catch (GSException e) {
 				throw SQLErrorUtils.error(
@@ -303,7 +326,8 @@ class SQLConnection implements Connection, LaterConnection {
 	private static List<InetSocketAddress> getAddressList(
 			URI uri, Properties info,
 			ServiceAddressResolver.Config sarConfig,
-			List<InetSocketAddress> memberList) throws SQLException {
+			List<InetSocketAddress> memberList,
+			InetAddress[] notificationInterfaceAddress) throws SQLException {
 		final List<InetSocketAddress> list =
 				new ArrayList<InetSocketAddress>();
 
@@ -416,6 +440,11 @@ class SQLConnection implements Connection, LaterConnection {
 					SQLErrorUtils.ILLEGAL_PARAMETER, message.toString(), null);
 		}
 
+		String key = "notificationInterfaceAddress";
+		if (info.containsKey(key)) {
+			notificationProps.setProperty(key, info.getProperty(key));
+		}
+
 		if (!notificationProps.isEmpty()) {
 			final String destProtocolKey = "ipProtocol";
 			final String srcProtocolKey = "internal." + destProtocolKey;
@@ -428,7 +457,8 @@ class SQLConnection implements Connection, LaterConnection {
 			try {
 				NodeResolver.getAddressProperties(
 						new WrappedProperties(notificationProps),
-						passive, sarConfig, memberList, null);
+						passive, sarConfig, memberList, null,
+						notificationInterfaceAddress);
 			}
 			catch (GSException e) {
 				throw SQLErrorUtils.error(
@@ -690,6 +720,80 @@ class SQLConnection implements Connection, LaterConnection {
 			}
 		}
 		return null;
+	}
+
+	private static NodeConnection.AuthType resolveAuthType(Properties props)
+			throws SQLException {
+		final String typeStr = props.getProperty(AUTHENTICATION_NAME, null);
+		if (typeStr != null) {
+			try {
+				return NodeConnection.LoginInfo.parseAuthType(typeStr);
+			}
+			catch (GSException e) {
+				throw SQLErrorUtils.error(0, null, e);
+			}
+		}
+		return null;
+	}
+
+	private static NodeConnection.ConnectionRoute resolveConnectionRoute(Properties props)
+			throws SQLException {
+		final String routeStr = props.getProperty(CONNECTION_ROUTE_NAME, null);
+		if (routeStr != null) {
+			try {
+				return NodeConnection.LoginInfo.parseConnectionRoute(routeStr);
+			}
+			catch (GSException e) {
+				throw SQLErrorUtils.error(0, null, e);
+			}
+		}
+		return null;
+	}
+
+	private static NodeConnection.Config createConnectionConfig(
+			Properties props, Options options) throws SQLException {
+		final NodeConnection.Config config = new NodeConnection.Config();
+		final TransportProvider transProvider = options.getTransportProvider();
+		try {
+			final Properties transProps =
+					resolveTransportProperties(props, transProvider);
+			applySocketConfig(config, transProvider, transProps);
+		}
+		catch (IOException e) {
+			throw SQLErrorUtils.error(0, null, e);
+		}
+		return config;
+	}
+
+	private static void applySocketConfig(
+			NodeConnection.Config config, TransportProvider transProvider,
+			Properties transProps)  throws IOException {
+		final Set<SocketType> socketTypes = EnumSet.noneOf(SocketType.class);
+		if (transProvider.isPlainSocketAllowed(transProps)) {
+			socketTypes.add(SocketType.PLAIN);
+		}
+
+		final Map<SocketType, SocketFactory> socketFactories =
+				new EnumMap<SocketType, SocketFactory>(SocketType.class);
+		socketFactories.put(SocketType.PLAIN, SocketFactory.getDefault());
+		{
+			final SocketFactory secureFactory =
+					transProvider.createSecureSocketFactory(transProps);
+			if (secureFactory != null) {
+				socketTypes.add(SocketType.SECURE);
+				socketFactories.put(SocketType.SECURE, secureFactory);
+			}
+		}
+
+		config.setSocketConfig(socketTypes, socketFactories);
+	}
+
+	private static Properties resolveTransportProperties(
+			Properties props, TransportProvider transProvider)
+			throws IOException {
+		final Properties transProps = new Properties();
+		transProvider.filterProperties(props, transProps);
+		return transProps;
 	}
 
 	@Override
@@ -1063,6 +1167,12 @@ class SQLConnection implements Connection, LaterConnection {
 							false));
 		}
 
+		if (loginInfo.getAuthType() != null) {
+			props.setProperty(
+					AUTHENTICATION_NAME,
+					loginInfo.getAuthType().toPropertyString());
+		}
+
 		return props;
 	}
 
@@ -1249,7 +1359,7 @@ class SQLConnection implements Connection, LaterConnection {
 
 		final NodeConnection.Config connectionConfig =
 				new NodeConnection.Config();
-		connectionConfig.set(this.connectionConfig);
+		connectionConfig.set(this.connectionConfig, true);
 
 		if (heartbeatTimeoutMillis > 0) {
 			connectionConfig.setHeartbeatTimeoutMillis(heartbeatTimeoutMillis);
@@ -1699,6 +1809,61 @@ class SQLConnection implements Connection, LaterConnection {
 			final byte[] bytes = new byte[buf.base().remaining()];
 			buf.base().get(bytes);
 			return bytes;
+		}
+
+	}
+
+	static class Options {
+
+		private TransportProvider transportProvider =
+				new PlainTransportProvider();
+
+		Options(Options src) {
+			if (src != null) {
+				transportProvider = src.transportProvider;
+			}
+		}
+
+		public TransportProvider getTransportProvider() {
+			return transportProvider;
+		}
+
+		public void setTransportProvider(TransportProvider provider) {
+			this.transportProvider = provider;
+		}
+
+	}
+
+	private static class PlainTransportProvider implements TransportProvider {
+
+		@Override
+		public void filterProperties(Properties src, Properties transProps)
+				throws GSException {
+			for (String key : getReservedTransportPropertyKeys()) {
+				if (src.containsKey(key)) {
+					throw new GSException(
+							GSErrorCode.ILLEGAL_PROPERTY_ENTRY,
+							"Unacceptable property specified because of " +
+							"lack of extra library (key=" + key + ")");
+				}
+			}
+		}
+
+		@Override
+		public boolean isPlainSocketAllowed(Properties props)
+				throws GSException {
+			return true;
+		}
+
+		@Override
+		public SSLSocketFactory createSecureSocketFactory(Properties props)
+				throws GSException {
+			return null;
+		}
+
+		public static java.util.Collection<String>
+		getReservedTransportPropertyKeys() {
+			return Arrays.asList("sslMode");
 		}
 
 	}
