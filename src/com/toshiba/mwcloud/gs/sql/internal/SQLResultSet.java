@@ -57,6 +57,15 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 	private static final Pattern INTEGER_PATTERN =
 			Pattern.compile("^\\-?[0-9]+$");
 
+	private static final Pattern TIMESTAMP_PATTERN = Pattern.compile(
+			"([0-9]{4,}-[0-9]{2}-[0-9]{2})?" +
+			"([T ])?" +
+			"(?:" +
+					"([0-9]{2}:[0-9]{2}:[0-9]{2})" +
+					"(?:[.]([0-9]+))?" +
+			")?" +
+			"(.+)?");
+
 	private final SQLStatement statement;
 
 	private final ContainerInfo containerInfo;
@@ -1283,7 +1292,7 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 					wasNull = true;
 					return defaultValue;
 				}
-				return convertValueType(type, value, cal);
+				return convertValueType(type, value, cal, columnIndex);
 			}
 
 			@SuppressWarnings("unchecked")
@@ -1305,7 +1314,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 	}
 
 	private <T> T convertValueType(
-			Class<T> type, Object value, Calendar cal) throws SQLException {
+			Class<T> type, Object value, Calendar cal, int columnIndex)
+			throws SQLException {
 		if (type.isInstance(value)) {
 			return type.cast(value);
 		}
@@ -1400,6 +1410,13 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				else if (value instanceof Number) {
 					destValue = value.toString();
 				}
+				else if (value instanceof Timestamp) {
+					final TimeUnit timePrecision = containerInfo.getColumnInfo(
+							columnIndex - 1).getTimePrecision();
+					destValue = TimestampUtils.getFormat(
+							resolveTimeZoneOffset(), timePrecision).format(
+							(java.util.Date) value);
+				}
 				else if (value instanceof java.util.Date) {
 					destValue = TimestampUtils.format(
 							(java.util.Date) value, resolveTimeZoneOffset());
@@ -1407,8 +1424,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				else {
 					final byte[] bytesValue;
 					try {
-						bytesValue =
-								convertValueType(byte[].class, value, cal);
+						bytesValue = convertValueType(
+								byte[].class, value, cal, columnIndex);
 					}
 					catch (SQLException e) {
 						cause = e;
@@ -1425,7 +1442,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 
 					final long srcNumber;
 					try {
-						srcNumber = convertValueType(Long.class, value, cal);
+						srcNumber = convertValueType(
+								Long.class, value, cal, columnIndex);
 					}
 					catch (SQLException e) {
 						cause = e;
@@ -1446,8 +1464,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				else if (value instanceof String) {
 					final String stringValue;
 					try {
-						stringValue =
-								convertValueType(String.class, value, cal);
+						stringValue = convertValueType(
+								String.class, value, cal, columnIndex);
 					}
 					catch (SQLException e) {
 						cause = e;
@@ -1488,8 +1506,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				if (value instanceof Number) {
 					final long longValue;
 					try {
-						longValue =
-								convertValueType(Long.class, value, cal);
+						longValue = convertValueType(
+								Long.class, value, cal, columnIndex);
 					}
 					catch (SQLException e) {
 						cause = e;
@@ -1503,7 +1521,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				else {
 					try {
 						destValue = parseDate(
-								convertValueType(String.class, value, cal),
+								convertValueType(
+										String.class, value, cal, columnIndex),
 								cal);
 					}
 					catch (SQLException e) {
@@ -1515,7 +1534,7 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 			else if (type == Time.class) {
 				try {
 					destValue = new Time(convertValueType(
-							Date.class, value, cal).getTime());
+							Date.class, value, cal, columnIndex).getTime());
 				}
 				catch (SQLException e) {
 					cause = e;
@@ -1523,19 +1542,39 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 				}
 			}
 			else if (type == Timestamp.class) {
-				try {
-					destValue = new Timestamp(convertValueType(
-							Date.class, value, cal).getTime());
+				if (value instanceof Number) {
+					final long longValue;
+					try {
+						longValue = convertValueType(
+								Long.class, value, cal, columnIndex);
+					}
+					catch (SQLException e) {
+						cause = e;
+						break;
+					}
+					destValue = new Timestamp(longValue);
 				}
-				catch (SQLException e) {
-					cause = e;
-					break;
+				else if (value instanceof java.util.Date) {
+					destValue = new Timestamp(((java.util.Date) value).getTime());
+				}
+				else {
+					try {
+						destValue = parseTimestamp(
+								convertValueType(
+										String.class, value, cal, columnIndex),
+								cal);
+					}
+					catch (SQLException e) {
+						cause = e;
+						break;
+					}
 				}
 			}
 			else if (type == Blob.class) {
 				final byte[] bytesValue;
 				try {
-					bytesValue = convertValueType(byte[].class, value, cal);
+					bytesValue = convertValueType(
+							byte[].class, value, cal, columnIndex);
 				}
 				catch (SQLException e) {
 					cause = e;
@@ -1570,7 +1609,8 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 			else if (type == InputStream.class) {
 				final byte[] bytesValue;
 				try {
-					bytesValue = convertValueType(byte[].class, value, cal);
+					bytesValue = convertValueType(
+							byte[].class, value, cal, columnIndex);
 				}
 				catch (SQLException e) {
 					cause = e;
@@ -1668,83 +1708,173 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 
 	private Date parseDate(String stringValue, Calendar cal)
 			throws SQLException {
-		final TimeZone zoneInValue;
-		final String nonZonedValue;
-		{
-			final Matcher zoneMatcher =
-					PropertyUtils.getTimeZoneOffsetPattern().matcher(
-							stringValue);
-			if (zoneMatcher.find() &&
-					zoneMatcher.end() == stringValue.length()) {
-				try {
-					zoneInValue = PropertyUtils.parseTimeZoneOffset(
-							zoneMatcher.group(), false);
-				}
-				catch (GSException e) {
-					throw SQLErrorUtils.error(0, null, e);
-				}
-				nonZonedValue = stringValue.substring(0, zoneMatcher.start());
+		return new Date(parseTimestamp(stringValue, cal).getTime());
+	}
+
+	private Timestamp parseTimestamp(String stringValue, Calendar cal)
+			throws SQLException {
+		return parseTimestamp(stringValue, cal, statement);
+	}
+
+	private static Timestamp parseTimestamp(
+			String stringValue, Calendar cal, SQLStatement statement)
+			throws SQLException {
+		do {
+			final String[] elems = tryNormalizeTimestampString(stringValue);
+			if (elems == null) {
+				break;
 			}
-			else {
-				if (cal == null) {
-					zoneInValue = resolveTimeZoneOffset();
-				}
-				else {
-					zoneInValue = cal.getTimeZone();
-				}
-				nonZonedValue = stringValue;
+	
+			final String mainStr = elems[0];
+			final String fractionStr = elems[1];
+			final String zoneStr = elems[2];
+	
+			final int fraction = tryParseTimestampFraction(fractionStr);
+			if (fraction < 0) {
+				break;
 			}
+	
+			final TimeZone basicZone = tryParseBasicTimeZone(zoneStr);
+			final TimeZone defaultZone = (basicZone == null ?
+					resolveTimeZoneOffset(cal, statement) : basicZone);
+	
+			final boolean zoneIncluded = (zoneStr != null && basicZone == null);
+			final String normalizedStr = mainStr + (zoneIncluded ? zoneStr : "");
+	
+			final Timestamp ts = tryParseNormalizedTimestamp(
+					normalizedStr, fraction, zoneIncluded, defaultZone);
+			if (ts == null) {
+				break;
+			}
+			return ts;
 		}
-
-		for (String formatString : new String[] {
-			"yyyy-MM-dd'T'HH:mm:ss.SSS",
-			"yyyy-MM-dd'T'HH:mm:ss",
-			"yyyy-MM-dd HH:mm:ss.SSS",
-			"yyyy-MM-dd HH:mm:ss",
-			"yyyy-MM-dd",
-			"HH:mm:ss.SSS",
-			"HH:mm:ss",
-		}) {
-			for (String zoneString : new String[] {
-					"",
-					"z",
-					"Z",
-					"'Z'"
-				}) {
-				final DateFormat format = new SimpleDateFormat(
-						formatString + zoneString, Locale.ROOT);
-				format.setLenient(false);
-
-				if (cal != null) {
-					format.setCalendar((Calendar) cal.clone());
-				}
-
-				final TimeZone zone;
-				final String parsingValue;
-				if (zoneString.isEmpty()) {
-					zone = zoneInValue;
-					parsingValue = nonZonedValue;
-				}
-				else {
-					zone = PropertyUtils.createTimeZoneOffset(0);
-					parsingValue = stringValue;
-				}
-				format.setTimeZone(zone);
-
-				final ParsePosition pos = new ParsePosition(0);
-				final java.util.Date parsed = format.parse(parsingValue, pos);
-				if (parsed == null || pos.getIndex() != parsingValue.length()) {
-					continue;
-				}
-
-				return new Date(parsed.getTime());
-			}
-		}
-
+		while (false);
+	
 		throw SQLErrorUtils.error(
 				SQLErrorUtils.VALUE_TYPE_CONVERSION_FAILED,
-				"Failed to parse date (stringValue=" + stringValue + ")",
+				"Failed to parse timestamp (stringValue=" + stringValue + ")",
 				null);
+	}
+
+	private static Timestamp tryParseNormalizedTimestamp(
+			String normalizedStr, int fraction, boolean zoneIncluded,
+			TimeZone defaultZone) {
+		final String baseFormat = "yyyy-MM-dd'T'HH:mm:ss";
+		for (String zoneFormat : new String[] {
+				"",
+				"z",
+				"Z"
+				}) {
+			if (zoneIncluded == zoneFormat.isEmpty()) {
+				continue;
+			}
+	
+			final TimeZone zone;
+			if (zoneFormat.isEmpty()) {
+				zone = defaultZone;
+			}
+			else {
+				zone = PropertyUtils.createTimeZoneOffset(0);
+			}
+	
+			final DateFormat format = new SimpleDateFormat(
+					baseFormat + zoneFormat, Locale.ROOT);
+			format.setLenient(false);
+			format.setTimeZone(zone);
+	
+			final ParsePosition pos = new ParsePosition(0);
+			final java.util.Date parsed = format.parse(normalizedStr, pos);
+			if (parsed == null || pos.getIndex() != normalizedStr.length()) {
+				continue;
+			}
+	
+			final Timestamp ts = new Timestamp(parsed.getTime());
+			ts.setNanos(fraction);
+			return ts;
+		}
+		return null;
+	}
+
+	private static String[] tryNormalizeTimestampString(String stringValue) {
+		final Matcher matcher = TIMESTAMP_PATTERN.matcher(stringValue);
+		if (!matcher.matches()) {
+			return null;
+		}
+	
+		final String dateStr = matcher.group(1);
+		final String separator = matcher.group(2);
+		final String timeStr = matcher.group(3);
+		final String fractionStr = matcher.group(4);
+		final String zoneStr = matcher.group(5);
+	
+		if (dateStr == null && timeStr == null) {
+			return null;
+		}
+	
+		if ((separator == null) == (dateStr != null && timeStr != null)) {
+			return null;
+		}
+	
+		final StringBuilder builder = new StringBuilder();
+		builder.append(dateStr == null ? "1970-01-01" : dateStr);
+		builder.append("T");
+		builder.append(timeStr == null ? "00:00:00" : timeStr);
+	
+		return new String[] {
+				builder.toString(),
+				fractionStr,
+				zoneStr
+		};
+	}
+
+	private static int tryParseTimestampFraction(String fractionStr)
+			throws SQLException {
+		if (fractionStr == null) {
+			return 0;
+		}
+	
+		switch (fractionStr.length()) {
+		case 3:
+		case 6:
+		case 9:
+			break;
+		default:
+			return -1;
+		}
+		final String paddedStr = String.format(
+				Locale.ROOT, "%-9s", fractionStr).replace(' ', '0');
+		try {
+			return Integer.parseInt(paddedStr);
+		}
+		catch (NumberFormatException e) {
+			throw SQLErrorUtils.error(0, null, e);
+		}
+	}
+
+	private static TimeZone tryParseBasicTimeZone(String zoneStr)
+			throws SQLException {
+		if (zoneStr == null) {
+			return null;
+		}
+
+		final String defaultZoneStr = "Z";
+		if (zoneStr.equals(defaultZoneStr)) {
+			return PropertyUtils.createTimeZoneOffset(0);
+		}
+
+		final Matcher zoneMatcher =
+				PropertyUtils.getTimeZoneOffsetPattern().matcher(
+						zoneStr);
+		if (!zoneMatcher.matches()) {
+			return null;
+		}
+
+		try {
+			return PropertyUtils.parseTimeZoneOffset(zoneStr, false);
+		}
+		catch (GSException e) {
+			throw SQLErrorUtils.error(0, null, e);
+		}
 	}
 
 	private static byte[] hexStringToBytes(
@@ -1788,12 +1918,26 @@ class SQLResultSet implements ResultSet, LaterResultSet {
 	}
 
 	private TimeZone resolveTimeZoneOffset() {
+		return resolveTimeZoneOffset(statement);
+	}
+
+	private static TimeZone resolveTimeZoneOffset(SQLStatement statement) {
 		final TimeZone zone = statement.getTimeZoneOffset();
 		if (zone == null) {
 			return PropertyUtils.createTimeZoneOffset(0);
 		}
 		else {
 			return zone;
+		}
+	}
+
+	private static TimeZone resolveTimeZoneOffset(
+			Calendar cal, SQLStatement statement) {
+		if (cal == null) {
+			return resolveTimeZoneOffset(statement);
+		}
+		else {
+			return cal.getTimeZone();
 		}
 	}
 

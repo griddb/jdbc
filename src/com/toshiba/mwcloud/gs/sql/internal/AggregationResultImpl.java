@@ -15,50 +15,9 @@
 */
 package com.toshiba.mwcloud.gs.sql.internal;
 
-import java.util.Date;
-
 class AggregationResultImpl implements AggregationResult {
 
-	private Object value;
-
 	void setValue(Object value) {
-		this.value = value;
-	}
-
-	@Override
-	public Double getDouble() {
-		if (value instanceof Double) {
-			return (Double) value;
-		}
-		else if (value instanceof Long) {
-			return (double) (Long) value;
-		}
-		else {
-			return null;
-		}
-	}
-
-	@Override
-	public Long getLong() {
-		if (value instanceof Long) {
-			return (Long) value;
-		}
-		else if (value instanceof Double) {
-			return (long) (double) (Double) value;
-		}
-		else {
-			return null;
-		}
-	}
-
-	@Override
-	public Date getTimestamp() {
-		if (value instanceof Date) {
-			return (Date) value;
-		}
-		else {
-			return null;
-		}
 	}
 
 }

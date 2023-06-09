@@ -46,6 +46,7 @@ import java.util.List;
 import javax.sql.rowset.serial.SerialBlob;
 
 import com.toshiba.mwcloud.gs.sql.internal.RowMapper.MappingMode;
+import com.toshiba.mwcloud.gs.sql.internal.RowMapper.SchemaFeatureLevel;
 import com.toshiba.mwcloud.gs.sql.internal.SQLLaterFeatures.LaterPreparedStatement;
 import com.toshiba.mwcloud.gs.sql.internal.proxy.ProxyTargetInstanceFactory;
 
@@ -683,12 +684,12 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		return destList;
 	}
 
-	protected void putInputTable(BasicBuffer out) throws SQLException {
+	protected SchemaFeatureLevel putInputTable(BasicBuffer out) throws SQLException {
 		final boolean found = (rowList != null && !rowList.isEmpty());
 		out.putBoolean(found);
 
 		if (!found) {
-			return;
+			return SchemaFeatureLevel.LEVEL1;
 		}
 
 		checkParameterAssigned();
@@ -732,6 +733,8 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 				out.base().position(tablePos - Integer.SIZE / Byte.SIZE);
 				out.putInt(tableSize);
 				out.base().position(tablePos + tableSize);
+
+				return cursor.getOutputFeatureLevel(mapper);
 			}
 		}
 		catch (GSException e) {
