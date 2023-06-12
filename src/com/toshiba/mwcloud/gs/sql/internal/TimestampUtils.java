@@ -15,6 +15,7 @@
 */
 package com.toshiba.mwcloud.gs.sql.internal;
 
+import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.FieldPosition;
 import java.text.NumberFormat;
@@ -24,9 +25,11 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Formatter;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * <div lang="ja">
@@ -80,8 +83,7 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static Calendar currentCalendar() {
-		final Calendar calendar = Calendar.getInstance(
-				PropertyUtils.createTimeZoneOffset(0), Locale.ROOT);
+		final Calendar calendar = createCalendar(null);
 		if (TRIM_MILLISECONDS) {
 			calendar.set(Calendar.MILLISECOND, 0);
 		}
@@ -95,6 +97,8 @@ class TimestampUtils {
 	 * <p>{@code amount}に負の値を指定することで、指定の時刻より
 	 * 前の時刻を求めることができます。</p>
 	 *
+	 * <p>マイクロ・ナノ秒精度の単位は未サポートです。</p>
+	 *
 	 * <p>現バージョンでは、算出の際に使用されるタイムゾーンはUTCです。</p>
 	 *
 	 * @param timestamp 対象とする時刻
@@ -105,6 +109,8 @@ class TimestampUtils {
 	 *
 	 * @throws NullPointerException {@code timestamp}、{@code timeUnit}に
 	 * {@code null}が指定された場合
+	 * @throws IllegalArgumentException 未サポートの{@code timeUnit}が指定された
+	 * 場合
 	 * </div><div lang="en">
 	 * Adds a specific value to the specified time.
 	 *
@@ -122,14 +128,14 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static Date add(Date timestamp, int amount, TimeUnit timeUnit) {
-		return add(
-				timestamp, amount, timeUnit,
-				PropertyUtils.createTimeZoneOffset(0));
+		return add(timestamp, amount, timeUnit, null);
 	}
 
 	/**
 	 * <div lang="ja">
 	 * 指定のタイムゾーン設定を用い、時刻に一定の値を加算します。
+	 *
+	 * <p>マイクロ・ナノ秒精度の単位は未サポートです。</p>
 	 *
 	 * <p>演算に用いる時間の単位によっては、タイムゾーン設定の影響を受けない
 	 * 場合があります。</p>
@@ -137,12 +143,14 @@ class TimestampUtils {
 	 * @param timestamp 対象とする時刻
 	 * @param amount 加算する値
 	 * @param timeUnit 加算する値の単位
-	 * @param zone 演算に用いるタイムゾーン設定
+	 * @param zone 演算に用いるタイムゾーン設定、または、{@code null}
 	 *
 	 * @return 加算された値
 	 *
 	 * @throws NullPointerException {@code timestamp}、{@code timeUnit}に
 	 * {@code null}が指定された場合
+	 * @throws IllegalArgumentException 未サポートの{@code timeUnit}が指定された
+	 * 場合
 	 *
 	 * @see #add(Date, int, TimeUnit)
 	 *
@@ -168,7 +176,7 @@ class TimestampUtils {
 	 */
 	public static Date add(
 			Date timestamp, int amount, TimeUnit timeUnit, TimeZone zone) {
-		final Calendar calendar = Calendar.getInstance(zone, Locale.ROOT);
+		final Calendar calendar = createCalendar(zone);
 
 		try {
 			calendar.setTime(timestamp);
@@ -203,10 +211,17 @@ class TimestampUtils {
 			return Calendar.SECOND;
 		case MILLISECOND:
 			return Calendar.MILLISECOND;
+		case MICROSECOND:
+			break;
+		case NANOSECOND:
+			break;
 		default:
 			throw new Error("Internal error by unknown time unit (timeUnit=" +
 					timeUnit + ")");
 		}
+		throw new IllegalArgumentException(
+				"Unsupported time unit for the timestamp operation (" +
+				"timeUnit=" + timeUnit + ")");
 	}
 
 	/**
@@ -229,20 +244,21 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static String format(Date timestamp) {
-		return format(timestamp, PropertyUtils.createTimeZoneOffset(0));
+		return format(timestamp, null);
 	}
 
 	/**
 	 * <div lang="ja">
-	 * 指定のタイムゾーン設定を用い、TQLのTIMESTAMP値表記に従って時刻の
-	 * 文字列表現を求めます。
+	 * 指定のタイムゾーン設定を用い、TQLの通常精度のTIMESTAMP値表記に従って
+	 * 時刻の文字列表現を求めます。
 	 *
 	 * @param timestamp 対象とする時刻
-	 * @param zone 演算に用いるタイムゾーン設定
+	 * @param zone 演算に用いるタイムゾーン設定、または、{@code null}
 	 *
 	 * @return 対応する文字列表現
 	 *
-	 * @throws NullPointerException 引数に{@code null}が指定された場合
+	 * @throws NullPointerException {@code timestamp}引数に{@code null}が
+	 * 指定された場合
 	 *
 	 * @see #format(Date)
 	 *
@@ -265,18 +281,38 @@ class TimestampUtils {
 	 */
 	public static String format(Date timestamp, TimeZone zone) {
 		final DateFormat format = getFormat(zone);
-		try {
-			return format.format(timestamp);
-		}
-		catch (NullPointerException e) {
-			throw GSErrorCode.checkNullParameter(timestamp, "timestamp", e);
-		}
+		return format.format(checkTimestamp(timestamp));
 	}
 
 	/**
 	 * <div lang="ja">
-	 * TQLのTIMESTAMP値表記に従い、指定の文字列に対応する{@link Date}を
-	 * 求めます。
+	 * 指定のタイムゾーン設定を用い、高精度のTIMESTAMP値表記に従って
+	 * 時刻の文字列表現を求めます。
+	 *
+	 * @param timestamp 対象とする時刻
+	 * @param zone 演算に用いるタイムゾーン設定、または、{@code null}
+	 *
+	 * @return 対応する文字列表現
+	 *
+	 * @throws NullPointerException {@code timestamp}引数に{@code null}が
+	 * 指定された場合
+	 *
+	 * @see #format(Date)
+	 *
+	 * @since 5.3
+	 * </div><div lang="en">
+	 * @since 5.3
+	 * </div>
+	 */
+	public static String formatPrecise(Timestamp timestamp, TimeZone zone) {
+		final DateFormat format = getFormat(zone, getDefaultPrecision(true));
+		return format.format(checkTimestamp(timestamp));
+	}
+
+	/**
+	 * <div lang="ja">
+	 * TQLの通常精度のTIMESTAMP値表記に従い、指定の文字列に対応する
+	 * {@link Date}を求めます。
 	 *
 	 * @param source 対象とする時刻の文字列表現
 	 *
@@ -296,12 +332,28 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static Date parse(String source) throws ParseException {
-		try {
-			return getFormat().parse(source);
-		}
-		catch (NullPointerException e) {
-			throw GSErrorCode.checkNullParameter(source, "source", e);
-		}
+		return getFormat().parse(checkSource(source));
+	}
+
+	/**
+	 * <div lang="ja">
+	 * 通常精度もしくは高精度のTIMESTAMP値表記に従い、指定の文字列に
+	 * 対応する{@link Timestamp}を求めます。
+	 *
+	 * @param source 対象とする時刻の文字列表現
+	 *
+	 * @return 指定の文字列に対応する{@link Timestamp}
+	 *
+	 * @throws ParseException 時刻の文字列表記と一致しない文字列が指定された場合
+	 * @throws NullPointerException 引数に{@code null}が指定された場合
+	 * @since 5.3
+	 * </div><div lang="en">
+	 * @since 5.3
+	 * </div>
+	 */
+	public static Timestamp parsePrecise(String source) throws ParseException {
+		final DateFormat format = getFormat(null, getDefaultPrecision(true));
+		return (Timestamp) format.parse(checkSource(source));
 	}
 
 	/**
@@ -324,7 +376,7 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static DateFormat getFormat() {
-		return getFormat(PropertyUtils.createTimeZoneOffset(0));
+		return getFormat(null);
 	}
 
 	/**
@@ -332,11 +384,9 @@ class TimestampUtils {
 	 * 指定のタイムゾーン設定が適用され、TQLのTIMESTAMP値表記と対応する、
 	 * 日付フォーマットを取得します。
 	 *
-	 * @param zone 適用対象のタイムゾーン設定
+	 * @param zone 適用対象のタイムゾーン設定、または、{@code null}
 	 *
 	 * @return 日付フォーマット
-	 *
-	 * @throws NullPointerException 引数に{@code null}が指定された場合
 	 *
 	 * @since 4.3
 	 * </div><div lang="en">
@@ -353,11 +403,79 @@ class TimestampUtils {
 	 * </div>
 	 */
 	public static DateFormat getFormat(TimeZone zone) {
-		try {
-			return new CustomDateFormat(zone);
+		return getFormat(zone, null);
+	}
+
+	/**
+	 * <div lang="ja">
+	 * 指定のタイムゾーン設定・日時精度が適用され、TQLのTIMESTAMP値表記と
+	 * 対応する、日付フォーマットを取得します。
+	 *
+	 * <p>日時精度の指定は、次のいずれかのみをサポートします。</p>
+	 * <ul>
+	 * <li>{@link TimeUnit#SECOND}</li>
+	 * <li>{@link TimeUnit#MILLISECOND}</li>
+	 * <li>{@link TimeUnit#MICROSECOND}</li>
+	 * <li>{@link TimeUnit#NANOSECOND}</li>
+	 * <li>{@code null} ({@link TimeUnit#MILLISECOND}が指定されたものとして
+	 * 解釈)</li>
+	 * </ul>
+	 *
+	 * @param zone 適用対象のタイムゾーン設定、または、{@code null}
+	 * @param timePrecision 適用対象の日時精度、または、{@code null}
+	 *
+	 * @return 日付フォーマット
+	 *
+	 * @throws IllegalArgumentException 未サポートの日時精度が指定された場合
+	 *
+	 * @since 5.3
+	 * </div><div lang="en">
+	 * @since 5.3
+	 * </div>
+	 */
+	public static DateFormat getFormat(TimeZone zone, TimeUnit timePrecision) {
+		return new CustomDateFormat(
+				resolveTimeZone(zone), resolvePrecision(timePrecision));
+	}
+
+	private static Date checkTimestamp(Date timestamp) {
+		GSErrorCode.checkNullParameter(timestamp, "timestamp", null);
+		return timestamp;
+	}
+
+	private static String checkSource(String source) {
+		GSErrorCode.checkNullParameter(source, "source", null);
+		return source;
+	}
+
+	private static TimeZone resolveTimeZone(TimeZone base) {
+		if (base == null) {
+			return createDefaultTimeZone();
 		}
-		catch (NullPointerException e) {
-			throw GSErrorCode.checkNullParameter(zone, "zone", e);
+		return base;
+	}
+
+	private static TimeUnit resolvePrecision(TimeUnit base) {
+		if (base == null) {
+			return getDefaultPrecision(false);
+		}
+		return base;
+	}
+
+	private static Calendar createCalendar(TimeZone zone) {
+		return Calendar.getInstance(resolveTimeZone(null), Locale.ROOT);
+	}
+
+	private static TimeZone createDefaultTimeZone() {
+		return PropertyUtils.createTimeZoneOffset(0);
+	}
+
+	private static TimeUnit getDefaultPrecision(boolean precise) {
+		if (precise) {
+			return TimeUnit.NANOSECOND;
+		}
+		else {
+			return TimeUnit.MILLISECOND;
 		}
 	}
 
@@ -367,19 +485,22 @@ class TimestampUtils {
 
 		private static final int MILLIS_DOT_MIN_POSITION = 19;
 
+		private static final Pattern FRACTION_PATTERN =
+				Pattern.compile("[.][0-9]{3}([0-9]{6}|[0-9]{3})");
+
 		private final TimeZone zone;
+
+		private final TimeUnit timePrecision;
 
 		private DateFormat secondsFormat;
 
 		private DateFormat millisFormat;
 
-		CustomDateFormat(TimeZone zone) {
-			if (zone.useDaylightTime()) {
-				throw new IllegalArgumentException(
-						"Daylight time is currently not supported " +
-						"(timeZone=" + zone.getDisplayName(Locale.ROOT) + ")");
-			}
+		CustomDateFormat(TimeZone zone, TimeUnit timePrecision) {
+			checkTimeZone(zone);
+			checkTimePrecision(timePrecision);
 			this.zone = (TimeZone) zone.clone();
+			this.timePrecision = timePrecision;
 		}
 
 		private DateFormat getSecondsFormat(TimeZone zone) {
@@ -406,10 +527,20 @@ class TimestampUtils {
 			return format;
 		}
 
-		private DateFormat getBaseFormat(String source, TimeZone zone) {
+		private DateFormat getBaseOutputFormat(TimeZone zone) {
+			if (isFractionAllowed()) {
+				return getMillisFormat(zone);
+			}
+			else {
+				return getSecondsFormat(zone);
+			}
+		}
+
+		private DateFormat getBaseInputFormat(String source, TimeZone zone) {
 			DateFormat format;
 			if (source.length() > MILLIS_DOT_MIN_POSITION &&
-					source.indexOf('.', MILLIS_DOT_MIN_POSITION) >= 0) {
+					source.indexOf('.', MILLIS_DOT_MIN_POSITION) >= 0 &&
+					isFractionAllowed()) {
 				format = getMillisFormat(zone);
 			}
 			else {
@@ -427,16 +558,19 @@ class TimestampUtils {
 		@Override
 		public StringBuffer format(
 				Date date, StringBuffer toAppendTo, FieldPosition fieldPosition) {
-			final StringBuffer sb = getMillisFormat(this.zone).format(
+			final StringBuffer sb = getBaseOutputFormat(zone).format(
 					date, toAppendTo, fieldPosition);
+			if (checkTimePrecision(timePrecision)) {
+				formatPrecisePart(date, sb);
+			}
 			sb.append(PropertyUtils.formatTimeZoneOffset(
-					this.zone.getRawOffset(), false));
+					zone.getRawOffset(), false));
 			return sb;
 		}
 
 		@Override
 		public Date parse(String source, ParsePosition pos) {
-			final String[] elems = splitZonePart(source);
+			final String[] elems = splitToElements(source);
 			if (elems == null) {
 				return null;
 			}
@@ -449,8 +583,12 @@ class TimestampUtils {
 				return null;
 			}
 
-			final DateFormat baseFormat = getBaseFormat(source, zone);
-			return parseStrict(baseFormat, elems[0], pos);
+			final DateFormat baseFormat = getBaseInputFormat(source, zone);
+			final Date date = parseStrict(baseFormat, elems[0], pos);
+			if (checkTimePrecision(timePrecision)) {
+				return parsePrecisePart(date, elems[2]);
+			}
+			return date;
 		}
 
 		@Override
@@ -505,14 +643,47 @@ class TimestampUtils {
 			return super.equals(obj);
 		}
 
-		private static String[] splitZonePart(String str) {
+		private static void checkTimeZone(TimeZone zone) {
+			if (zone.useDaylightTime()) {
+				throw new IllegalArgumentException(
+						"Daylight time is currently not supported " +
+						"(timeZone=" + zone.getDisplayName(Locale.ROOT) + ")");
+			}
+		}
+
+		private static boolean checkTimePrecision(TimeUnit timePrecision) {
+			switch (timePrecision) {
+			case SECOND:
+				return false;
+			case MILLISECOND:
+				return false;
+			case MICROSECOND:
+				return true;
+			case NANOSECOND:
+				return true;
+			default:
+				throw new IllegalArgumentException(
+						"Illegal time precision (precision=" + timePrecision +")");
+			}
+		}
+
+		private boolean isFractionAllowed() {
+			switch (timePrecision) {
+			case SECOND:
+				return false;
+			default:
+				return true;
+			}
+		}
+
+		private String[] splitToElements(String str) {
 			final Matcher matcher =
 					PropertyUtils.getTimeZoneOffsetPattern().matcher(str);
 
-			final String mainPart;
+			final int zonePos;
 			final String zonePart;
 			if (matcher.find() && matcher.end() == str.length()) {
-				mainPart = str.substring(0, matcher.start());
+				zonePos = matcher.start();
 				zonePart = matcher.group();
 			}
 			else {
@@ -520,10 +691,44 @@ class TimestampUtils {
 				if (!str.endsWith(utcZone)) {
 					return null;
 				}
-				mainPart = str.substring(0, str.length() - utcZone.length());
+				zonePos = str.length() - utcZone.length();
 				zonePart = utcZone;
 			}
-			return new String[] { mainPart, zonePart };
+
+			final int precisePos = findPrecisePosition(str, zonePos);
+			final String mainPart;
+			final String precisePart;
+			if (precisePos < 0) {
+				mainPart = str.substring(0, zonePos);
+				precisePart = null;
+			}
+			else {
+				mainPart = str.substring(0, precisePos);
+				precisePart = str.substring(precisePos, zonePos);
+			}
+			return new String[] { mainPart, zonePart, precisePart };
+		}
+
+		private int findPrecisePosition(String str, int zonePos) {
+			final int maxLength;
+			switch (timePrecision) {
+			case MICROSECOND:
+				maxLength = 3;
+				break;
+			case NANOSECOND:
+				maxLength = 6;
+				break;
+			default:
+				return -1;
+			}
+
+			final Matcher matcher = FRACTION_PATTERN.matcher(str);
+			if (!matcher.find() || matcher.end() != zonePos ||
+					matcher.end(1) - matcher.start(1) > maxLength) {
+				return -1;
+			}
+
+			return matcher.start(1);
 		}
 
 		private Date parseStrict(
@@ -539,6 +744,60 @@ class TimestampUtils {
 				return null;
 			}
 			return parsed;
+		}
+
+		private void formatPrecisePart(Date date, StringBuffer sb) {
+			final int nanos;
+			if (date instanceof Timestamp) {
+				nanos = ((Timestamp) date).getNanos() %  (1000 * 1000);
+			}
+			else {
+				nanos = 0;
+			}
+
+			final int unit;
+			final String format;
+			switch (timePrecision) {
+			case MICROSECOND:
+				unit = 1000;
+				format = "%03d";
+				break;
+			case NANOSECOND:
+				unit = 1;
+				format = "%06d";
+				break;
+			default:
+				throw new Error();
+			}
+
+			new Formatter(sb, Locale.ROOT).format(format, nanos / unit);
+		}
+
+		private static Timestamp parsePrecisePart(
+				Date mainDate, String precisePart) {
+			if (mainDate == null) {
+				return null;
+			}
+
+			final long timeMillis = mainDate.getTime();
+			int nanos = (int) (timeMillis % 1000) * (1000 * 1000);
+			if (precisePart != null) {
+				int sub;
+				try {
+					sub = Integer.parseInt(precisePart);
+				}
+				catch (NumberFormatException e) {
+					throw new IllegalArgumentException(e);
+				}
+				if (precisePart.length() <= 3) {
+					sub *= 1000;
+				}
+				nanos += sub;
+			}
+
+			final Timestamp ts = new Timestamp(timeMillis);
+			ts.setNanos(nanos);
+			return ts;
 		}
 
 	}

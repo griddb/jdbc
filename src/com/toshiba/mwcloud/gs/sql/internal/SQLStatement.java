@@ -29,8 +29,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
+import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.FeatureVersion;
 import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.OptionalRequest;
 import com.toshiba.mwcloud.gs.sql.internal.NodeConnection.OptionalRequestType;
+import com.toshiba.mwcloud.gs.sql.internal.RowMapper.SchemaFeatureLevel;
 import com.toshiba.mwcloud.gs.sql.internal.SQLConnection.BaseConnection;
 import com.toshiba.mwcloud.gs.sql.internal.SQLConnection.Hook;
 import com.toshiba.mwcloud.gs.sql.internal.SQLLaterFeatures.LaterStatement;
@@ -922,8 +924,23 @@ class SQLStatement implements Statement, LaterStatement {
 		}
 	}
 
-	protected void putInputTable(BasicBuffer out) throws SQLException {
+	protected SchemaFeatureLevel putInputTable(BasicBuffer out)
+			throws SQLException {
 		out.putBoolean(false);
+		return SchemaFeatureLevel.LEVEL1;
+	}
+
+	protected void checkSchemaFeatureLevel(
+			NodeConnection base, SchemaFeatureLevel level)
+			throws SQLException {
+		if (SchemaFeatureLevel.LEVEL2.compareTo(level) <= 0 &&
+				FeatureVersion.V5_3.compareTo(
+						base.getRemoteFeatureVersion()) > 0) {
+			throw SQLErrorUtils.errorNotSupportedFeature(
+					SQLErrorUtils.OPTIONAL_FEATURE_NOT_SUPPORTED,
+					"Requested client does not support extended schema feature",
+					null);
+		}
 	}
 
 	protected void setQueryDirect(String sql) throws SQLException {

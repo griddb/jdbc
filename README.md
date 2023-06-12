@@ -12,7 +12,7 @@ There is [Jar Package for GridDB Community Edition on Maven Central Repository](
 Building and program execution are checked in the environment below.
 
     OS: CentOS 7.9(x64)
-    GridDB server: V5.1 CE(Community Edition)
+    GridDB server: V5.3 CE(Community Edition)
 
 ## Quick start
 

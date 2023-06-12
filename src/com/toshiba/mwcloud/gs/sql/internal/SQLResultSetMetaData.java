@@ -18,6 +18,7 @@ package com.toshiba.mwcloud.gs.sql.internal;
 import java.sql.Blob;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.sql.Types;
 
 import com.toshiba.mwcloud.gs.sql.internal.SQLLaterFeatures.LaterResultSetMetaData;
@@ -126,6 +127,20 @@ implements ResultSetMetaData, LaterResultSetMetaData {
 	@Override
 	public int getPrecision(int column) throws SQLException {
 		checkColumn(column);
+		final ColumnInfo info = getGSColumnInfo(column);
+		final TimeUnit timePrecision = info.getTimePrecision();
+		if (timePrecision != null) {
+			switch (timePrecision) {
+			case MILLISECOND:
+				return 3;
+			case MICROSECOND:
+				return 6;
+			case NANOSECOND:
+				return 9;
+			default:
+				break;
+			}
+		}
 		return 0;
 	}
 
@@ -239,7 +254,8 @@ implements ResultSetMetaData, LaterResultSetMetaData {
 	public String getColumnClassName(int column) throws SQLException {
 		checkColumn(column);
 
-		final GSType gsType = getGSColumnType(column);
+		final ColumnInfo info = getGSColumnInfo(column);
+		final GSType gsType = info.getType();
 		if (gsType == null) {
 			return Object.class.getName();
 		}
@@ -260,6 +276,9 @@ implements ResultSetMetaData, LaterResultSetMetaData {
 		case DOUBLE:
 			return Double.class.getName();
 		case TIMESTAMP:
+			if (info.getTimePrecision() != TimeUnit.MILLISECOND) {
+				return Timestamp.class.getName();
+			}
 			return java.util.Date.class.getName();
 		case STRING:
 			return String.class.getName();
@@ -290,7 +309,11 @@ implements ResultSetMetaData, LaterResultSetMetaData {
 	}
 
 	private GSType getGSColumnType(int column) throws SQLException {
-		return info.getColumnInfo(column - 1).getType();
+		return getGSColumnInfo(column).getType();
+	}
+
+	private ColumnInfo getGSColumnInfo(int column) throws SQLException {
+		return info.getColumnInfo(column - 1);
 	}
 
 	private static SQLException errorColumnType(
