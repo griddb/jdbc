@@ -2,10 +2,11 @@ GridDB JDBC Driver
 
 ## Overview
 
-The GridDB JDBC Driver provides a SQL interface for GridDB.  
+The GridDB JDBC Driver provides an SQL interface for GridDB.  
 
 (Additional information)  
-There is [Jar Package for GridDB Community Edition on Maven Central Repository](https://search.maven.org/search?q=a:gridstore-jdbc) .
+There is [Jar Package for GridDB Community Edition on Maven Central Repository](https://search.maven.org/search?q=a:gridstore-jdbc).
+To download the precompiled jars, click on View all to see all versions of the driver, browse, and download gridstore-jdbc-x.x.x.jar from the repository.
 
 ## Operating environment
 
@@ -28,7 +29,7 @@ and create the following file and links under the bin/ folder.
     gridstore-jdbc-call-logging.jar
 
 ### Execute a sample program
-GridDB server need to be started in advance with "myCluster" as a cluster name and multicast method.
+GridDB server needs to be started in advance with "myCluster" as a cluster name and multicast method.
 
     $ export CLASSPATH=${CLASSPATH}:./bin/gridstore-jdbc.jar
     $ cp sample/en/jdbc/JDBCSelect.java .
