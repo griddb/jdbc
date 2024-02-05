@@ -44,7 +44,11 @@ class SQLStatement implements Statement, LaterStatement {
 	private static final RowMapper.Config DEFAULT_MAPPER_CONFIG =
 			new RowMapper.Config(true, true, true, false);
 
-	static boolean batchOperationSupported = false;
+	static boolean batchOperationSupported = true;
+
+	static boolean statementBatchOperationSupported = false;
+
+	private boolean isExecuteBatch = false;
 
 	private final SQLConnection connection;
 
@@ -307,7 +311,7 @@ class SQLStatement implements Statement, LaterStatement {
 
 	@Override
 	public void addBatch(String sql) throws SQLException {
-		if (!batchOperationSupported) {
+		if (!batchOperationSupported || !statementBatchOperationSupported) {
 			throw SQLErrorUtils.errorNotSupported();
 		}
 
@@ -317,7 +321,7 @@ class SQLStatement implements Statement, LaterStatement {
 
 	@Override
 	public void clearBatch() throws SQLException {
-		if (!batchOperationSupported) {
+		if (!batchOperationSupported || !statementBatchOperationSupported) {
 			throw SQLErrorUtils.errorNotSupported();
 		}
 
@@ -328,17 +332,19 @@ class SQLStatement implements Statement, LaterStatement {
 
 	@Override
 	public int[] executeBatch() throws SQLException {
-		if (!batchOperationSupported) {
+		if (!batchOperationSupported || !statementBatchOperationSupported) {
 			throw SQLErrorUtils.errorNotSupported();
 		}
 
 		checkOpened();
 
+		isExecuteBatch = true;
 		try {
-			execute(StatementOperation.EXECUTE, true);
+			execute(StatementOperation.EXECUTE, false);
 		}
 		finally {
 			queryList.clear();
+			isExecuteBatch = false;
 		}
 
 		final int[] batchResult = new int[resultList.size()];
@@ -527,6 +533,32 @@ class SQLStatement implements Statement, LaterStatement {
 		}
 	}
 
+	protected boolean getIsExecuteBatch() {
+		return isExecuteBatch;
+	}
+
+	protected void setIsExecuteBatch(boolean flag) {
+		isExecuteBatch = flag;
+	}
+
+	protected int getResultListSize() {
+		if (resultList == null) {
+			return 0;
+		}
+		else {
+			return resultList.size();
+		}
+	}
+
+	protected Result getResultList(int index) {
+		if (resultList != null && resultList.size() > 0 && 0 <= index && index < resultList.size()) {
+			return resultList.get(index);
+		}
+		else {
+			return null;
+		}
+	}
+
 	protected void checkOpened() throws SQLException {
 		if (isClosed()) {
 			throw SQLErrorUtils.errorAlreadyClosed();
@@ -640,6 +672,9 @@ class SQLStatement implements Statement, LaterStatement {
 						(long) fetchSize);
 				optionalRequest.put(OptionalRequestType.DB_NAME,
 						connection.getDbName());
+				if (isExecuteBatch) {
+					optionalRequest.putFeatureVersion(FeatureVersion.V5_5);
+				}
 				connection.putOptionalRequest(optionalRequest);
 
 				optionalRequest.format(req);
