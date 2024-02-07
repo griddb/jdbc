@@ -24,6 +24,7 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.sql.Array;
 import java.sql.Blob;
@@ -54,6 +55,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SimpleTimeZone;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
@@ -108,6 +110,10 @@ class SQLConnection implements Connection, LaterConnection {
 		};
 	}
 
+	private static final String USER_NAME = "user";
+
+	private static final String PASSWORD_NAME = "password";
+
 	private static final String LOGIN_TIMEOUT_NAME = "loginTimeout";
 
 	private static final String NETWORK_TIMEOUT_NAME =
@@ -129,6 +135,9 @@ class SQLConnection implements Connection, LaterConnection {
 
 	private static final String CONNECTION_ROUTE_NAME = "connectionRoute";
 
+	private static final String CATALOG_AND_SCHEMA_IGNORABLE_NAME =
+			"catalogAndSchemaIgnorable";
+
 	private static final long DEFAULT_LOGIN_TIMEOUT = 5 * 60 * 1000;
 
 	private static final long DEFAULT_NETWORK_TIMEOUT = 5 * 60 * 1000;
@@ -136,6 +145,8 @@ class SQLConnection implements Connection, LaterConnection {
 	private static final long DEFAULT_HEARTBEAT_TIMEOUT = 1 * 60 * 1000;
 
 	private static final long DEFAULT_FAILOVER_INTERVAL = 1 * 1000;
+
+	private static final boolean DEFAULT_CATALOG_AND_SCHEMA_IGNORABLE = true;
 
 	private static int sqlProtocolVersion = -9;
 
@@ -150,6 +161,8 @@ class SQLConnection implements Connection, LaterConnection {
 	private final String dbName;
 
 	private final String userName;
+
+	private final String url;
 
 	private final NodeConnectionPool resolverConnections;
 
@@ -183,6 +196,9 @@ class SQLConnection implements Connection, LaterConnection {
 
 	private long failoverIntervalMillis = DEFAULT_FAILOVER_INTERVAL;
 
+	private boolean catalogAndSchemaIgnorable =
+			DEFAULT_CATALOG_AND_SCHEMA_IGNORABLE;
+
 	private boolean initialized;
 
 	private boolean transactionStarted;
@@ -200,9 +216,11 @@ class SQLConnection implements Connection, LaterConnection {
 		SQLErrorUtils.checkNullParameter(url, "url", null);
 		SQLErrorUtils.checkNullParameter(info, "info", null);
 
+		final URI driverURI;
 		final URI gsURI;
 		try {
-			gsURI = toSpecificURI(toDriverURI(url));
+			driverURI = toDriverURI(url);
+			gsURI = toSpecificURI(driverURI);
 		}
 		catch (URISyntaxException e) {
 			throw SQLErrorUtils.error(
@@ -251,6 +269,7 @@ class SQLConnection implements Connection, LaterConnection {
 
 		this.userName = userName;
 		this.dbName = dbName;
+		this.url = formatURL(driverURI, gsURI, uriPath, uriQuery);
 
 		req = new BasicBuffer(64);
 		resp = new BasicBuffer(64);
@@ -561,6 +580,50 @@ class SQLConnection implements Connection, LaterConnection {
 		return uriQuery;
 	}
 
+	private static String formatURL(
+			URI driverURI, URI gsURI, String[] uriPath,
+			Properties uriQuery) throws SQLException {
+		try {
+			final URI destSpecificUri = new URI(
+					gsURI.getScheme(), gsURI.getRawAuthority(),
+					formatURIPath(uriPath), formatURIQuery(uriQuery), null);
+			final URI destDriverUri = new URI(
+					driverURI.getScheme(), destSpecificUri.toString(), null);
+			return destDriverUri.toString();
+		}
+		catch (URISyntaxException e) {
+			throw SQLErrorUtils.error(0, null, e);
+		}
+	}
+
+	private static String formatURIPath(String[] uriPath) throws SQLException {
+		final StringBuilder builder = new StringBuilder();
+		for (String component : uriPath) {
+			builder.append("/");
+			builder.append(encodeURL(component));
+		}
+		return builder.toString();
+	}
+
+	private static String formatURIQuery(Properties props) throws SQLException {
+		final StringBuilder builder = new StringBuilder();
+		for (String name : new TreeSet<String>(props.stringPropertyNames())) {
+			if (name.equals(PASSWORD_NAME)) {
+				
+				continue;
+			}
+			final String value = props.getProperty(name);
+
+			if (builder.length() > 0) {
+				builder.append("&");
+			}
+			builder.append(encodeURL(name));
+			builder.append("=");
+			builder.append(encodeURL(value));
+		}
+		return (builder.length() > 0 ? builder.toString() : null);
+	}
+
 	private static String[] getUserInfo(
 			URI uri, Properties uriQuery, Properties info)
 			throws SQLException {
@@ -593,8 +656,8 @@ class SQLConnection implements Connection, LaterConnection {
 				continue;
 			}
 
-			final String user = props.getProperty("user");
-			final String password = props.getProperty("password");
+			final String user = props.getProperty(USER_NAME);
+			final String password = props.getProperty(PASSWORD_NAME);
 			if (user == null ^ password == null) {
 				throw SQLErrorUtils.error(
 						SQLErrorUtils.ILLEGAL_PARAMETER,
@@ -1181,25 +1244,12 @@ class SQLConnection implements Connection, LaterConnection {
 			Map<String, ClientInfoStatus> failedProperties,
 			boolean unknownAllowed)
 			throws SQLException {
-		final String[] allNames = {
-				LOGIN_TIMEOUT_NAME,
-				NETWORK_TIMEOUT_NAME,
-				HEARTBEAT_TIMEOUT_NAME,
-				FAILOVER_INTERVAL_NAME
-		};
-
-		final long[] timeoutList = {
-				loginTimeoutMillis,
-				networkTimeoutMillis,
-				heartbeatTimeoutMillis,
-				failoverIntervalMillis
-		};
-
+		
 		if (!unknownAllowed) {
 			final Set<Object> unknownNames =
 					new HashSet<Object>(properties.keySet());
-			for (String name : allNames) {
-				unknownNames.remove(name);
+			for (ClientInfoKey<?> key : ClientInfoKey.getAll()) {
+				unknownNames.remove(key.getName());
 			}
 
 			for (Object nameObj : unknownNames) {
@@ -1218,29 +1268,27 @@ class SQLConnection implements Connection, LaterConnection {
 			}
 		}
 
-		for (int i = 0; i < allNames.length; i++) {
-			final String name = allNames[i];
-			if (properties.containsKey(name)) {
-				timeoutList[i] = getTimeoutProperty(
-						failedProperties, name, properties.getProperty(name),
-						timeoutList[i]);
+		
+		
+		final List<ClientInfoKey.Entry<?>> entryList =
+				new ArrayList<ClientInfoKey.Entry<?>>();
+		for (ClientInfoKey<?> key : ClientInfoKey.getAll()) {
+			final String strValue = properties.getProperty(key.getName());
+			if (strValue != null) {
+				entryList.add(
+						key.parseEntry(failedProperties, this, strValue));
 			}
 		}
 
-		this.loginTimeoutMillis = timeoutList[0];
-		this.networkTimeoutMillis = timeoutList[1];
-		this.heartbeatTimeoutMillis = timeoutList[2];
-		this.failoverIntervalMillis = timeoutList[3];
+		
+		for (ClientInfoKey.Entry<?> entry : entryList) {
+			entry.apply(this);
+		}
 	}
 
 	private static long getTimeoutProperty(
 			Map<String, ClientInfoStatus> failedProperties,
-			String name, String value, long defaultTimeout)
-			throws SQLException {
-		if (value == null) {
-			return defaultTimeout;
-		}
-
+			String name, String value) throws SQLException {
 		try {
 			return Math.max(Integer.parseInt(value) * 1000L, -1);
 		}
@@ -1249,6 +1297,23 @@ class SQLConnection implements Connection, LaterConnection {
 			throw SQLErrorUtils.error(SQLErrorUtils.ILLEGAL_PARAMETER,
 					"Failed to parse timeout value (name=" + name +
 					", value=" + value + ", reason=" + e.getMessage() + ")", e);
+		}
+	}
+
+	private static boolean getBooleanProperty(
+			Map<String, ClientInfoStatus> failedProperties,
+			String name, String value) throws SQLException {
+		if (Boolean.TRUE.toString().equals(value)) {
+			return true;
+		}
+		else if (Boolean.FALSE.toString().equals(value)) {
+			return false;
+		}
+		else {
+			failedProperties.put(name, ClientInfoStatus.REASON_VALUE_INVALID);
+			throw SQLErrorUtils.error(SQLErrorUtils.ILLEGAL_PARAMETER,
+					"Failed to parse boolean value (name=" + name +
+					", value=" + value + ")", null);
 		}
 	}
 
@@ -1302,6 +1367,10 @@ class SQLConnection implements Connection, LaterConnection {
 			return DEFAULT_FAILOVER_INTERVAL;
 		}
 		return failoverIntervalMillis;
+	}
+
+	boolean isCatalogAndSchemaIgnorable() {
+		return catalogAndSchemaIgnorable;
 	}
 
 	static void fillRequestHead(NodeConnection base, BasicBuffer req) {
@@ -1464,6 +1533,10 @@ class SQLConnection implements Connection, LaterConnection {
 		return dbName;
 	}
 
+	String getURL() {
+		return url;
+	}
+
 	SimpleTimeZone getTimeZoneOffset() {
 		return loginInfo.getTimeZoneOffset();
 	}
@@ -1580,6 +1653,15 @@ class SQLConnection implements Connection, LaterConnection {
 	private static String decodeURL(String src) throws SQLException {
 		try {
 			return URLDecoder.decode(src, "UTF-8");
+		}
+		catch (UnsupportedEncodingException e) {
+			throw new Error(e);
+		}
+	}
+
+	private static String encodeURL(String src) throws SQLException {
+		try {
+			return URLEncoder.encode(src, "UTF-8");
 		}
 		catch (UnsupportedEncodingException e) {
 			throw new Error(e);
@@ -1864,6 +1946,134 @@ class SQLConnection implements Connection, LaterConnection {
 		public static java.util.Collection<String>
 		getReservedTransportPropertyKeys() {
 			return Arrays.asList("sslMode");
+		}
+
+	}
+
+	static abstract class ClientInfoKey<T> {
+
+		private static final List<ClientInfoKey<?>> ALL_KEYS =
+				Arrays.<ClientInfoKey<?>>asList(
+						ofLoginTimeout(),
+						ofNetworkTimeout(),
+						ofHeartbearTimeout(),
+						ofFailoverInterval(),
+						ofCatalogAndSchemaIgnorable());
+
+		private final String name;
+
+		ClientInfoKey(String name) {
+			this.name = name;
+		}
+
+		static List<ClientInfoKey<?>> getAll() {
+			return ALL_KEYS;
+		}
+
+		String getName() {
+			return name;
+		}
+
+		Entry<T> parseEntry(
+				Map<String, ClientInfoStatus> failedProperties,
+				SQLConnection conn, String value) throws SQLException {
+			return new Entry<T>(this, parse(failedProperties, conn, value));
+		}
+
+		abstract void apply(SQLConnection conn, T value);
+
+		abstract T parse(
+				Map<String, ClientInfoStatus> failedProperties,
+				SQLConnection conn, String value) throws SQLException;
+
+		private static MilliTimeKey ofLoginTimeout() {
+			return new MilliTimeKey(LOGIN_TIMEOUT_NAME) {
+				@Override
+				void apply(SQLConnection conn, Long value) {
+					conn.loginTimeoutMillis = value;
+				}
+			};
+		}
+
+		private static MilliTimeKey ofNetworkTimeout() {
+			return new MilliTimeKey(NETWORK_TIMEOUT_NAME) {
+				@Override
+				void apply(SQLConnection conn, Long value) {
+					conn.networkTimeoutMillis = value;
+				}
+			};
+		}
+
+		private static MilliTimeKey ofHeartbearTimeout() {
+			return new MilliTimeKey(NETWORK_TIMEOUT_NAME) {
+				@Override
+				void apply(SQLConnection conn, Long value) {
+					conn.heartbeatTimeoutMillis = value;
+				}
+			};
+		}
+
+		private static MilliTimeKey ofFailoverInterval() {
+			return new MilliTimeKey(NETWORK_TIMEOUT_NAME) {
+				@Override
+				void apply(SQLConnection conn, Long value) {
+					conn.failoverIntervalMillis = value;
+				}
+			};
+		}
+
+		private static BooleanKey ofCatalogAndSchemaIgnorable() {
+			return new BooleanKey(CATALOG_AND_SCHEMA_IGNORABLE_NAME) {
+				@Override
+				void apply(SQLConnection conn, Boolean value) {
+					conn.catalogAndSchemaIgnorable = value;
+				}
+			};
+		}
+
+		static class Entry<T> {
+			final ClientInfoKey<T> key;
+			final T value;
+
+			public Entry(ClientInfoKey<T> key, T value) {
+				this.key = key;
+				this.value = value;
+			}
+
+			void apply(SQLConnection conn) {
+				key.apply(conn, value);
+			}
+
+		}
+
+		static abstract class MilliTimeKey extends ClientInfoKey<Long> {
+
+			public MilliTimeKey(String name) {
+				super(name);
+			}
+
+			@Override
+			Long parse(
+					Map<String, ClientInfoStatus> failedProperties,
+					SQLConnection conn, String value) throws SQLException {
+				return getTimeoutProperty(failedProperties, getName(), value);
+			}
+
+		}
+
+		static abstract class BooleanKey extends ClientInfoKey<Boolean> {
+
+			public BooleanKey(String name) {
+				super(name);
+			}
+
+			@Override
+			Boolean parse(
+					Map<String, ClientInfoStatus> failedProperties,
+					SQLConnection conn, String value) throws SQLException {
+				return getBooleanProperty(failedProperties, getName(), value);
+			}
+
 		}
 
 	}

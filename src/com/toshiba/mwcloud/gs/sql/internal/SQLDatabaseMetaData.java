@@ -69,7 +69,7 @@ implements DatabaseMetaData, LaterDatabaseMetadata {
 
 	@Override
 	public String getURL() throws SQLException {
-		return null;
+		return connection.getURL();
 	}
 
 	@Override
@@ -1450,8 +1450,11 @@ implements DatabaseMetaData, LaterDatabaseMetadata {
 		return value.replaceAll("'", "''");
 	}
 
-	private static boolean matchCatalogAndSchema(
+	private boolean matchCatalogAndSchema(
 			String catalog, String schemaPattern) {
+		if (connection.isCatalogAndSchemaIgnorable()) {
+			return true;
+		}
 		return ((catalog == null || catalog.isEmpty()) &&
 				(schemaPattern == null || schemaPattern.isEmpty()));
 	}

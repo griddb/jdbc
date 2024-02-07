@@ -65,6 +65,8 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 
 	private BitSet parameterAssignmentSet;
 
+	private List<BitSet> parameterAssignmentSetList;
+
 	private Row activeRow;
 
 	private ResultSetMetaData lastMetaData;
@@ -204,10 +206,8 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		}
 
 		activeRow = null;
-		rowList.clear();
 
 		activeRow = newRow;
-		rowList.add(activeRow);
 		parameterAssignmentSet.clear();
 	}
 
@@ -234,19 +234,26 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 			throw SQLErrorUtils.errorNotSupported();
 		}
 
-		checkParameterAssigned();
+		checkOpened();
 
 		final Row newRow;
 		try {
 			newRow = mapper.createGeneralRow();
+			if (activeRow != null) {
+				final int columnCount = mapper.getContainerInfo().getColumnCount();
+				for (int column = 0; column < columnCount; column++) {
+					if (parameterAssignmentSet.get(column)) {
+						newRow.setValue(column, activeRow.getValue(column));
+					}
+				}
+			}
 		}
 		catch (GSException e) {
 			throw SQLErrorUtils.error(0, null, e);
 		}
 
-		rowList.add(activeRow);
-		parameterAssignmentSet.clear();
-		activeRow = newRow;
+		rowList.add(newRow);
+		parameterAssignmentSetList.add((BitSet)parameterAssignmentSet.clone());
 	}
 
 	@Override
@@ -563,10 +570,47 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 
 	@Override
 	public void clearBatch() throws SQLException {
+		if (!batchOperationSupported) {
+			throw SQLErrorUtils.errorNotSupported();
+		}
+
 		checkOpened();
 		clearResults();
 
-		clearParameters();
+		rowList.clear();
+		parameterAssignmentSetList.clear();
+	}
+
+	@Override
+	public int[] executeBatch() throws SQLException {
+		if (!batchOperationSupported) {
+			throw SQLErrorUtils.errorNotSupported();
+		}
+
+		checkOpened();
+
+		final boolean bindInfoExists = (rowList != null && !rowList.isEmpty());
+		if (!bindInfoExists) {
+			return new int[0];
+		}
+
+		setIsExecuteBatch(true);
+		try {
+			execute(StatementOperation.EXECUTE, false);
+		}
+		finally {
+			rowList.clear();
+			parameterAssignmentSetList.clear();
+			setIsExecuteBatch(false);
+		}
+
+		final int[] batchResult = new int[getResultListSize()];
+		for (int i = 0; i < batchResult.length; i++) {
+			final Result result = getResultList(i);
+			batchResult[i] = result.updateCount;
+		}
+
+		return batchResult;
 	}
 
 	protected boolean refreshQuery(
@@ -621,6 +665,8 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 
 		final RowMapper mapper;
 		final List<Row> rowList;
+		final Row activeRow;
+		List<BitSet> parameterAssignmentSetList = new ArrayList<BitSet>();
 		try {
 			if (containerInfo == null) {
 				mapper = RowMapper.getInstance(
@@ -633,12 +679,17 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 			containerInfo = mapper.getContainerInfo();
 			rowList = rebuildRowList(
 					mapper, this.parameterAssignmentSet, this.rowList);
+			activeRow = (this.activeRow == null ? mapper.createGeneralRow() : this.activeRow);
+			if (this.parameterAssignmentSetList != null) {
+				for (Iterator<BitSet> it = this.parameterAssignmentSetList.iterator(); it.hasNext();) {
+					parameterAssignmentSetList.add(it.next());
+				}
+			}
 		}
 		catch (GSException e) {
 			throw SQLErrorUtils.error(0, null, e);
 		}
 
-		final Row activeRow = rowList.get(rowList.size() - 1);
 		final BitSet parameterAssignmentSet =
 				(this.parameterAssignmentSet == null ?
 						new BitSet(parameterCount) :
@@ -650,6 +701,7 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 		this.containerInfo = containerInfo;
 		this.rowList = rowList;
 		this.parameterAssignmentSet = parameterAssignmentSet;
+		this.parameterAssignmentSetList = parameterAssignmentSetList;
 		this.activeRow = activeRow;
 
 		return true;
@@ -677,24 +729,38 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 			}
 		}
 
-		if (destList.isEmpty()) {
-			destList.add(mapper.createGeneralRow());
-		}
-
 		return destList;
 	}
 
 	protected SchemaFeatureLevel putInputTable(BasicBuffer out) throws SQLException {
-		final boolean found = (rowList != null && !rowList.isEmpty());
+		final boolean found;
+		if (getIsExecuteBatch()) {
+			found = (rowList != null && !rowList.isEmpty());
+		}
+		else {
+			found = (activeRow != null);
+		}
 		out.putBoolean(found);
 
 		if (!found) {
 			return SchemaFeatureLevel.LEVEL1;
 		}
 
-		checkParameterAssigned();
+		if (getIsExecuteBatch()) {
+			checkRowListParameterAssigned();
+		}
+		else {
+			checkParameterAssigned();
+		}
+		List<Row> rowList = new ArrayList<Row>();
 
 		try {
+			if (getIsExecuteBatch()) {
+				rowList = rebuildRowList(mapper, parameterAssignmentSet, this.rowList);
+			}
+			else {
+				rowList.add(activeRow);
+			}
 			final int rowCount = rowList.size();
 			final int dummySize = 0;
 			{
@@ -775,6 +841,20 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 					"Parameter is not assigned (" +
 					"parameterIndex=" + (unassignedPos + 1) +
 					", parameterCount=" + parameterCount + ")", null);
+		}
+	}
+
+	private void checkRowListParameterAssigned() throws SQLException {
+		for (Iterator<BitSet> it = parameterAssignmentSetList.iterator(); it.hasNext();) {
+			final BitSet parameterAssignmentSet = it.next();
+			final int unassignedPos = parameterAssignmentSet.nextClearBit(0);
+			if (unassignedPos < parameterCount) {
+				throw SQLErrorUtils.error(
+						SQLErrorUtils.ILLEGAL_PARAMETER,
+						"Parameter is not assigned (" +
+						"parameterIndex=" + (unassignedPos + 1) +
+						", parameterCount=" + parameterCount + ")", null);
+			}
 		}
 	}
 
