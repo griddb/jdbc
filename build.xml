@@ -28,7 +28,7 @@
 
 		<javac destdir="${objDir}"
 			encoding="${srcEncoding}" debug="yes" includeantruntime="no"
-			source="1.6" target="1.6">
+			source="1.8" target="1.8">
 			<src path="${srcDir}"/>
 			<src path="${contribSrcDir}"/>
 		</javac>
@@ -39,7 +39,7 @@
 
 		<javac destdir="${callLoggingObjDir}"
 			encoding="${srcEncoding}" debug="yes" includeantruntime="no"
-			source="1.6" target="1.6">
+			source="1.8" target="1.8">
 			<classpath>
 				<pathelement location="${objDir}"/>
 				<path>
