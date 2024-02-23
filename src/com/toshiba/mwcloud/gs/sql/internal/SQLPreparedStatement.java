@@ -311,7 +311,7 @@ extends SQLStatement implements PreparedStatement, LaterPreparedStatement {
 	@Override
 	public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal)
 			throws SQLException {
-		throw SQLErrorUtils.errorNotSupported();
+        setValue(parameterIndex, x);
 	}
 
 	@Override
