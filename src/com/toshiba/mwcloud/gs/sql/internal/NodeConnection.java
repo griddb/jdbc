@@ -1993,8 +1993,8 @@ class NodeConnection implements Closeable {
 		V4_3,
 		V4_5,
 		V5_3,
-		V5_5
-
+		V5_5,
+		V5_6
 		;
 
 		public static FeatureVersion remoteValueOf(int ordinal)
