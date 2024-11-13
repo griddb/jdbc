@@ -12,8 +12,8 @@ To download the precompiled jars, click on View all to see all versions of the d
 
 Building and program execution are checked in the environment below.
 
-    OS: CentOS 7.9(x64)
-    GridDB server: V5.6 CE(Community Edition)
+    OS: Ubuntu 22.04(x64)
+    GridDB server: V5.7 CE(Community Edition)
 
 ## Quick start
 
