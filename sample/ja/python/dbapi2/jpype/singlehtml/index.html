@@ -1,0 +1,1426 @@
+
+<!DOCTYPE html>
+
+<html lang="ja" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>GridDB V5.7 ドキュメント</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/bizstyle.css" />
+
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="nav-item nav-item-0"><a href="#">GridDB V5.7 ドキュメント</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">GridDB V5.7 ドキュメント</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="griddb-python-api-sql">
+<h1>GridDB Python API(SQL)ガイド<a class="headerlink" href="#griddb-python-api-sql" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<span id="document-intro"></span><section id="id1">
+<h2>はじめに<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<p>本ドキュメントでは、GridDB PythonAPIのSQLインタフェースについて説明します。</p>
+<p>GridDB PythonAPIのSQLインタフェースは、JPype DBAPI2(OSS)を利用してJDBCドライバにアクセスし、
+DBAPI2仕様に準拠した操作を提供します。</p>
+<p>また、検索結果が大量ヒット時のデータ取得を高速化するために、Apache Arrow(OSS)の
+利用方法についても説明します。</p>
+<dl class="simple">
+<dt>※ DBAPI2: PEP 249 – Python Database API Specification v2.0</dt><dd><p><a class="reference external" href="https://peps.python.org/pep-0249/">https://peps.python.org/pep-0249/</a></p>
+</dd>
+</dl>
+<ul class="simple">
+<li><p>Python言語標準のDBアクセス用のAPI仕様</p></li>
+</ul>
+<dl class="simple">
+<dt>※ JPype:</dt><dd><p><a class="reference external" href="https://jpype.readthedocs.io/en/latest/index.html">https://jpype.readthedocs.io/en/latest/index.html</a></p>
+</dd>
+</dl>
+<ul class="simple">
+<li><p>Python からJNI(Java Native Interface)経由で Java アクセスを提供するソフト(OSS)</p></li>
+</ul>
+<dl class="simple">
+<dt>※ JPype DBAPI2:</dt><dd><p><a class="reference external" href="https://jpype.readthedocs.io/en/latest/dbapi2.html">https://jpype.readthedocs.io/en/latest/dbapi2.html</a></p>
+</dd>
+</dl>
+<ul class="simple">
+<li><p>JPype内のモジュールの1つ。JDBCドライバ上にDBAPI仕様による操作（実装）を提供するソフト(OSS)</p></li>
+</ul>
+<dl class="simple">
+<dt>※ Apahe Arrow:</dt><dd><p><a class="reference external" href="https://arrow.apache.org/">https://arrow.apache.org/</a></p>
+</dd>
+</dl>
+<ul class="simple">
+<li><p>Apacheプロジェクトの1つ。効率的なデータ交換のために設計された、カラム指向のデータフォーマット、ソフト(OSS)</p></li>
+</ul>
+<section id="id2">
+<h3>動作環境<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>OS: Ubunt22.04</p></li>
+<li><p>Java: 8</p></li>
+<li><p>Python: 3.10</p></li>
+</ul>
+<p>※ 本ガイドで記載している使い方について動作確認をしております。</p>
+</section>
+<section id="id3">
+<h3>クライアント側の動作に必要なソフト<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>GridDB JDBCドライバ</p></li>
+<li><p>JPype 1.5.0</p></li>
+<li><p>(データ取得を高速化したい場合) Apache Arrow 16.0.0</p></li>
+</ul>
+</section>
+</section>
+<span id="document-dbapi2-basic"></span><section id="id1">
+<h2>基本編<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<section id="id2">
+<h3>基本操作<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<p>基本操作として、接続、SQLの実行、検索結果の取得の3種類あります。</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p>大分類</p></td>
+<td><p>クラス</p></td>
+<td><p>メソッド</p></td>
+<td><p>機能概要</p></td>
+</tr>
+<tr class="row-even"><td><p>接続</p></td>
+<td></td>
+<td><p>connect()</p></td>
+<td><p>接続</p></td>
+</tr>
+<tr class="row-odd"><td><p>SQLの実行</p></td>
+<td><p>Cursor</p></td>
+<td><p>execute()</p></td>
+<td><p>SQLの実行</p></td>
+</tr>
+<tr class="row-even"><td></td>
+<td><p>Cursor</p></td>
+<td><p>executemany()</p></td>
+<td><p>N個入力のSQLの実行</p></td>
+</tr>
+<tr class="row-odd"><td><p>検索結果の取得</p></td>
+<td><p>Cursor</p></td>
+<td><p>fetchone()</p></td>
+<td><p>1件取得</p></td>
+</tr>
+<tr class="row-even"><td></td>
+<td><p>Cursor</p></td>
+<td><p>fetchmany()</p></td>
+<td><p>取得件数指定の取得</p></td>
+</tr>
+<tr class="row-odd"><td></td>
+<td><p>Cursor</p></td>
+<td><p>fetchall()</p></td>
+<td><p>全件取得</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id3">
+<h3>事前処理<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<p>事前に以下のインポートとJVMの起動が必要です。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jpype</span>
+<span class="kn">import</span> <span class="nn">jpype.dbapi2</span>
+<span class="n">jpype</span><span class="o">.</span><span class="n">startJVM</span><span class="p">(</span><span class="n">classpath</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;/usr/share/java/gridstore-jdbc.jar&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>startJVM()メソッドにて、JDBCドライバファイル gridstore-jdbc.jar をクラスパスに指定します。</p>
+</section>
+<section id="id4">
+<h3>接続<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
+<p>connect()メソッドに以下を指定してください。</p>
+<ul class="simple">
+<li><p>url: 接続に使うURL</p></li>
+<li><p>driver: &quot;com.toshiba.mwcloud.gs.sql.Driver&quot;</p></li>
+<li><p>driver_args: GridDBサーバに接続するためのGridDBユーザ名とパスワード</p></li>
+</ul>
+<p>接続の例</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">url</span> <span class="o">=</span> <span class="s2">&quot;jdbc:gs://127.0.0.1:20001/myCluster/public&quot;</span>
+<span class="n">conn</span> <span class="o">=</span> <span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">driver</span><span class="o">=</span><span class="s2">&quot;com.toshiba.mwcloud.gs.sql.Driver&quot;</span><span class="p">,</span>
+        <span class="n">driver_args</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;user&quot;</span><span class="p">:</span><span class="s2">&quot;admin&quot;</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">:</span><span class="s2">&quot;admin&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<section id="url">
+<h4>接続時のURL形式<a class="headerlink" href="#url" title="Link to this heading">¶</a></h4>
+<p>URLは以下の(A)～(D)の形式となります。クラスタ構成方式がマルチキャスト方式の場合、通常は(A)の形式で接続してください。 GridDBクラスタ側で自動的に負荷分散が行われ適切なノードに接続されます。 GridDBクラスタとの間でマルチキャストでの通信ができない場合のみ、他の形式で接続してください。</p>
+<p>(A)マルチキャスト方式のGridDBクラスタの適切なノードへ自動的に接続する場合</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">jdbc</span><span class="p">:</span><span class="n">gs</span><span class="p">:</span><span class="o">//</span><span class="p">(</span><span class="n">multicastAddress</span><span class="p">):(</span><span class="n">portNo</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">clusterName</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">databaseName</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>multicastAddress：GridDBクラスタとの接続に使うマルチキャストアドレス。(デフォルト: 239.0.0.1)</p></li>
+<li><p>portNo：GridDBクラスタとの接続に使うポート番号。(デフォルト: 41999)</p></li>
+<li><p>clusterName：GridDBクラスタのクラスタ名</p></li>
+<li><p>databaseName：データベース名。省略した場合はデフォルトデータベース(public)に接続します。</p></li>
+</ul>
+<p>(B)マルチキャスト方式のGridDBクラスタ内のノードに直接接続する場合</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">jdbc</span><span class="p">:</span><span class="n">gs</span><span class="p">:</span><span class="o">//</span><span class="p">(</span><span class="n">nodeAddress</span><span class="p">):(</span><span class="n">portNo</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">clusterName</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">databaseName</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>nodeAddress：ノードのアドレス</p></li>
+<li><p>portNo：ノードとの接続に使うポート番号。(デフォルト: 20001)</p></li>
+<li><p>clusterName：ノードが属するGridDBクラスタのクラスタ名</p></li>
+<li><p>databaseName：データベース名。省略した場合はデフォルトデータベース(public)に接続します。</p></li>
+</ul>
+<p>(C)固定リスト方式のGridDBクラスタに接続する場合</p>
+<p>クラスタ構成方式が固定リスト方式の場合、この形式で接続してください。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">jdbc</span><span class="p">:</span><span class="n">gs</span><span class="p">:</span><span class="o">///</span><span class="p">(</span><span class="n">clusterName</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">databaseName</span><span class="p">)</span><span class="err">?</span><span class="n">notificationMember</span><span class="o">=</span><span class="p">(</span><span class="n">notificationMember</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>clusterName：GridDBクラスタのクラスタ名</p></li>
+<li><p>databaseName：データベース名。省略した場合はデフォルトデータベース(public)に接続します。</p></li>
+<li><dl class="simple">
+<dt>notificationMember：ノードのアドレスリスト(URLエンコードが必要)。デフォルトポートは20001</dt><dd><p>例：192.168.0.10:20001,192.168.0.11:20001,192.168.0.12:20001</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>※notificationMemberはgs_cluster.jsonファイルを編集することで変更可能です。 アドレスリストで使うポートは、gs_node.jsonファイルを編集することで変更可能です。</p>
+<p>(D)プロバイダ方式のGridDBクラスタに接続する場合</p>
+<p>クラスタ構成方式がプロバイダ方式の場合、この形式で接続してください。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">jdbc</span><span class="p">:</span><span class="n">gs</span><span class="p">:</span><span class="o">///</span><span class="p">(</span><span class="n">clusterName</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">databaseName</span><span class="p">)</span><span class="err">?</span><span class="n">notificationProvider</span><span class="o">=</span><span class="p">(</span><span class="n">notificationProvider</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>clusterName：GridDBクラスタのクラスタ名</p></li>
+<li><p>databaseName：データベース名。省略した場合はデフォルトデータベースに接続します</p></li>
+<li><p>notificationProvider：アドレスプロバイダのURL(URLエンコードが必要)</p></li>
+</ul>
+<p>※notificationProviderはgs_cluster.jsonファイルを編集することで変更可能です。</p>
+</section>
+<section id="id5">
+<h4>その他情報の設定<a class="headerlink" href="#id5" title="Link to this heading">¶</a></h4>
+<p>接続時には次の情報も設定できます。</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 10.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>設定項目</p></th>
+<th class="head"><p>プロパティ名</p></th>
+<th class="head"><p>説明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>接続タイムアウト</p></td>
+<td><p>loginTimeout</p></td>
+<td><p>接続タイムアウト(秒)。デフォルトは300秒</p></td>
+</tr>
+<tr class="row-odd"><td><p>外部通信経路指定</p></td>
+<td><p>connectionRoute</p></td>
+<td><p>外部通信経路を用いた接続を行う場合、PUBLICを指定します</p></td>
+</tr>
+<tr class="row-even"><td><p>マルチキャスト受信I/F指定</p></td>
+<td><p>notificationNetworkInferfaceAddress</p></td>
+<td><p>マルチキャストパケットを受信するインターフェースのアドレス</p></td>
+</tr>
+<tr class="row-odd"><td><p>アプリケーション名</p></td>
+<td><p>applicationName</p></td>
+<td><p>アプリケーション名</p></td>
+</tr>
+<tr class="row-even"><td><p>タイムゾーン</p></td>
+<td><p>timeZone</p></td>
+<td><p>タイムゾーン。サーバ側で指定したタイムゾーンの日時文字列を取得したい場合に指定します</p></td>
+</tr>
+</tbody>
+</table>
+<p>GridDBユーザ名と同様にdriver_args部分に「プロパティ名=設定値」形式で設定できます。
+また、接続タイムアウト以外は、URLの末尾に「?プロパティ名=設定値」形式で追記しても設定できます。</p>
+</section>
+</section>
+<section id="sql">
+<h3>SQLの実行<a class="headerlink" href="#sql" title="Link to this heading">¶</a></h3>
+<p>3つの実行例を示します。</p>
+<ol class="upperalpha simple">
+<li><p>execute()によるSQLの実行例</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE IF NOT EXISTS Sample ( id integer PRIMARY KEY, value string )&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;INSERT INTO Sample values (0, &#39;test0&#39;)&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;INSERT INTO Sample values (1, &#39;test1&#39;)&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * from Sample where id &gt; 0&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">curs</span><span class="o">.</span><span class="n">fetchall</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleSimple.pyをご参照ください。</p>
+<ol class="upperalpha simple" start="2">
+<li><p>execute()によるプレースホルダ付きSQLの実行例</p></li>
+</ol>
+<p>プレースホルダは「?」記号を使います。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;INSERT INTO Sample values (?, ?)&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;test0&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleParametered.pyをご参照ください。</p>
+<ol class="upperalpha simple" start="3">
+<li><p>executemany()によるプレースホルダ付きSQLの実行例</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;test0&#39;</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;test1&#39;</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s1">&#39;test2&#39;</span><span class="p">)</span> <span class="p">]</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="s2">&quot;INSERT INTO Sample values (?, ?)&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleMany.pyをご参照ください。</p>
+</section>
+<section id="id6">
+<h3>検索結果の取得<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h3>
+<p>3つの実行例を示します。</p>
+<ol class="upperalpha simple">
+<li><p>1件取得の例</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * from Sample where id &gt; 0&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+</pre></div>
+</div>
+<ol class="upperalpha simple" start="2">
+<li><p>N件指定での取得の例</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * from Sample where id &gt; 0&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">fetchmany</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="upperalpha simple" start="3">
+<li><p>全件取得の例</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">curs</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * from Sample where id &gt; 0&quot;</span><span class="p">)</span>
+<span class="n">curs</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="id7">
+<h3>その他<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h3>
+<p>以下のプロパティを使うことで、JDBCの直接操作が可能です。</p>
+<ul class="simple">
+<li><p>Conectionクラスのconnectionプロパティ：JDBCのConnectionオブジェクトを取得し、メタデータ取得等のJDBCの操作が可能</p></li>
+<li><p>CursorクラスのresultSetプロパティ：JDBCのResultSetオブジェクトを取得し、JDBCの操作が可能</p></li>
+</ul>
+<p>また、データ取得時・データ設定時のGridDBとPythonでのデータ型の対応関係については、
+付録の <a class="reference internal" href="index.html#getter"><span class="std std-ref">JPype DBAPI2 データ取得時</span></a> および <a class="reference internal" href="index.html#setter"><span class="std std-ref">JPype DBAPI2 データ設定時</span></a> をご覧ください。</p>
+</section>
+<section id="id8">
+<h3>制限事項<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h3>
+<p>JPype DBAPI2では以下の操作をサポートしておりません。【JPype DBAPI2仕様】</p>
+<ul class="simple">
+<li><p>setinputsizes(sizes)</p></li>
+<li><p>setoutputsize(size [, column])</p></li>
+</ul>
+<p>GridDB PythonAPI(SQL I/F)では以下の操作はサポートしておりません。【GridDB仕様】</p>
+<ul class="simple">
+<li><p>プロシージャコール(callproc())</p></li>
+<li><p>commit()およびroolback()</p></li>
+<li><p>nextset()およびlastrowidプロパティ</p></li>
+</ul>
+</section>
+</section>
+<span id="document-dbapi2-custom"></span><section id="id1">
+<h2>応用編<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<p>JPype DBAPI2のカスタマイズ機能を使うことで、以下の操作が可能となります。</p>
+<ul class="simple">
+<li><p>TIMESTAMP型のナノ秒精度でのデータ取得</p></li>
+<li><p>int/float型でのデータ取得</p></li>
+<li><p>BLOB型のデータ設定</p></li>
+</ul>
+<p>JPype DBAPI2をカスタマイズするために、Adapters/Convertersを使うことになります。</p>
+<ul class="simple">
+<li><p>Adapters：パラメータを設定するときに、Python型からJava型に変換するために使用されます。</p></li>
+<li><p>Converters：検索結果が生成されるとコンバータを使用して、Java型をPython型に変換し直すことができます。</p></li>
+</ul>
+<section id="timestamp">
+<h3>TIMESTAMP型のナノ秒精度でのデータ取得<a class="headerlink" href="#timestamp" title="Link to this heading">¶</a></h3>
+<p>Connectionオブジェクトの_convertersメンバに以下の設定を追加することで、
+ナノ秒精度で定義されたTIMESTAMP型のデータ取得で、ナノ秒を保持することが可能になります。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jpype.imports</span>
+<span class="kn">import</span> <span class="nn">java.sql.Timestamp</span>
+
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">java</span><span class="o">.</span><span class="n">sql</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">]</span> <span class="o">=</span> <span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">_nop</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleTimestamp2-Nano.pyをご参照ください。</p>
+</section>
+<section id="pythonint-float">
+<h3>Pythonのint/float型でのデータ取得<a class="headerlink" href="#pythonint-float" title="Link to this heading">¶</a></h3>
+<p>Connectionオブジェクトの_convertersメンバに以下の設定を追加することで、
+Pythonのint/float型でデータを取得できるようになります。</p>
+<ul class="simple">
+<li><p>GridDBの整数型であるBYTE型・SHORT型・INTEGER型・LONG型についてPythonのint型でのデータ取得</p></li>
+<li><p>GridDBのFLOAT型・DOUBLE型についてPythonのfloat型でのデータ取得</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JByte</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JShort</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JInt</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JLong</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JFloat</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span>
+<span class="n">conn</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JDouble</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleTypes-IntFloat.pyをご参照ください。</p>
+</section>
+<section id="blob">
+<h3>BLOB型のデータ設定<a class="headerlink" href="#blob" title="Link to this heading">¶</a></h3>
+<p>Connectionオブジェクトの_adaptersメンバと_default_settersグローバルメンバに対し、
+以下の設定を追加することで、GridDBのBLOB型にデータ設定することが可能になります。</p>
+<p>(入力がbytes型の場合)</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jpype.imports</span>
+<span class="kn">from</span> <span class="nn">javax.sql.rowset.serial</span> <span class="kn">import</span> <span class="n">SerialBlob</span>
+
+<span class="n">conn</span><span class="o">.</span><span class="n">_adapters</span><span class="p">[</span><span class="nb">bytes</span><span class="p">]</span> <span class="o">=</span> <span class="n">SerialBlob</span>
+<span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">_default_setters</span><span class="p">[</span><span class="n">SerialBlob</span><span class="p">]</span> <span class="o">=</span> <span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">BLOB</span>
+</pre></div>
+</div>
+<p>(入力がBinary型の場合)</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">jpype.imports</span>
+<span class="kn">from</span> <span class="nn">javax.sql.rowset.serial</span> <span class="kn">import</span> <span class="n">SerialBlob</span>
+
+<span class="n">conn</span><span class="o">.</span><span class="n">_adapters</span><span class="p">[</span><span class="n">jpype</span><span class="o">.</span><span class="n">JArray</span><span class="p">(</span><span class="n">jpype</span><span class="o">.</span><span class="n">JByte</span><span class="p">)]</span> <span class="o">=</span> <span class="n">SerialBlob</span>
+<span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">_default_setters</span><span class="p">[</span><span class="n">SerialBlob</span><span class="p">]</span> <span class="o">=</span> <span class="n">jpype</span><span class="o">.</span><span class="n">dbapi2</span><span class="o">.</span><span class="n">BLOB</span>
+</pre></div>
+</div>
+<p>入力がbytes型の場合のサンプルコードはsampleBlob.pyをご参照ください。</p>
+</section>
+</section>
+<span id="document-arrow"></span><section id="id1">
+<h2>結果取得の高速化<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<p>検索結果が大量になる場合、結果取得に時間がかかります。
+Apache Arrowを使って結果取得することで、処理時間が短縮される場合があります。
+Apache Arrowを使った結果取得の方法には2通りあります。</p>
+<ul class="simple">
+<li><p>全件一括取得</p></li>
+<li><p>全件分割取得</p></li>
+</ul>
+<p>・JVM起動時のclasspathにJava処理用のjarファイル(gridstore-arrow-jdbc.jar)のパスを追加します。</p>
+<p>(Arrow JDBC Adapter)</p>
+<p>JPype経由で以下のJavaクラスを利用します。</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p>RootAllocator</p></td>
+<td><p>Arrowを利用するためのアロケータクラス</p></td>
+</tr>
+<tr class="row-even"><td><p>JdbcToArrow</p></td>
+<td><p>JDBCドライバのResultSetオブジェクトからArrow用のオブジェクトを作成するためのクラス</p></td>
+</tr>
+<tr class="row-odd"><td><p>JdbcToArrowConfigBuilder</p></td>
+<td><p>JdbcToArrowConfigオブジェクトを生成するためのクラス</p></td>
+</tr>
+</tbody>
+</table>
+<p>(PyArrow - Apache Arrow Python bindings)</p>
+<p>また、以下のPython上のArrow用オブジェクトを利用します。</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p>RecordBatch</p></td>
+<td><p>カラム指向のデータ構造。スキーマと各カラムごとのデータリストから構成されます</p></td>
+</tr>
+</tbody>
+</table>
+<section id="id2">
+<h3>全件一括取得<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<p>検索結果を全件一括で取得する操作は以下の通りです。</p>
+<p>(A)事前準備</p>
+<p>JVM起動後に以下の事前準備を行います。</p>
+<ul class="simple">
+<li><p>pyarrow.jvmとJava処理用クラスをインポートします。</p></li>
+<li><p>RootAllocatorオブジェクトを生成します。</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pyarrow.jvm</span>
+<span class="kn">from</span> <span class="nn">org.apache.arrow.adapter.jdbc</span> <span class="kn">import</span> <span class="n">JdbcToArrow</span>
+<span class="kn">from</span> <span class="nn">org.apache.arrow.memory</span> <span class="kn">import</span> <span class="n">RootAllocator</span>
+
+<span class="n">ra</span> <span class="o">=</span> <span class="n">RootAllocator</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>(B)データ取得処理</p>
+<p>検索実行後に以下の操作を行います。</p>
+<ul class="simple">
+<li><p>CursorクラスのresultSetプロパティでJDBCドライバのResultSetオブジェクトを取得します。</p></li>
+<li><p>ResultSetオブジェクトとRootAllocatorオブジェクトからArrow処理用のイテレータ(sqlToArrowVectorIterator)を取得します。</p></li>
+<li><p>イテレータのnext()メソッドで全件一括でデータ取得がなされます。</p></li>
+<li><p>pyarrow.jvmのrecord_batch()メソッドでPython上にRecordBatchオブジェクトを生成します。</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result_set</span> <span class="o">=</span> <span class="n">curs</span><span class="o">.</span><span class="n">resultSet</span>
+
+<span class="n">it</span> <span class="o">=</span> <span class="n">JdbcToArrow</span><span class="o">.</span><span class="n">sqlToArrowVectorIterator</span><span class="p">(</span><span class="n">result_set</span><span class="p">,</span> <span class="n">ra</span><span class="p">)</span>
+<span class="k">while</span> <span class="n">it</span><span class="o">.</span><span class="n">hasNext</span><span class="p">():</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">it</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">root</span><span class="o">.</span><span class="n">getRowCount</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">break</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">jvm</span><span class="o">.</span><span class="n">record_batch</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleArrowIteratorAll.pyをご参照ください。</p>
+</section>
+<section id="id3">
+<h3>全件分割取得<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<p>検索結果の件数が非常に多い場合、分割して取得することが可能です。</p>
+<p>(A)事前準備</p>
+<p>JVM起動後に以下の事前準備を行います。</p>
+<ul class="simple">
+<li><p>pyarrow.jvmとJava処理用クラスをインポートします。</p></li>
+<li><p>RootAllocatorオブジェクトを生成します。</p></li>
+<li><p>JdbcToArrowConfigBuilderオブジェクトを生成し、setTargetBatchSize()メソッドで分割して取得する件数を設定します。</p></li>
+<li><p>JdbcToArrowConfigオブジェクトを生成します。</p></li>
+</ul>
+<p>以下、2件づつデータを取得する場合の例です。</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pyarrow.jvm</span>
+<span class="kn">from</span> <span class="nn">org.apache.arrow.adapter.jdbc</span> <span class="kn">import</span> <span class="n">JdbcToArrowConfigBuilder</span><span class="p">,</span> <span class="n">JdbcToArrow</span>
+<span class="kn">from</span> <span class="nn">org.apache.arrow.memory</span> <span class="kn">import</span> <span class="n">RootAllocator</span>
+
+<span class="n">ra</span> <span class="o">=</span> <span class="n">RootAllocator</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">maxsize</span><span class="p">)</span>
+
+<span class="n">config_builder</span> <span class="o">=</span> <span class="n">JdbcToArrowConfigBuilder</span><span class="p">()</span>
+<span class="n">config_builder</span><span class="o">.</span><span class="n">setAllocator</span><span class="p">(</span><span class="n">ra</span><span class="p">)</span>
+<span class="n">config_builder</span><span class="o">.</span><span class="n">setTargetBatchSize</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="c1"># 分割して取得する件数を設定</span>
+<span class="n">pyarrow_jdbc_config</span> <span class="o">=</span> <span class="n">config_builder</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>(B)データ取得処理</p>
+<p>検索実行後に以下の操作を行います。</p>
+<ul class="simple">
+<li><p>CursorクラスのresultSetプロパティでJDBCドライバのResultSetオブジェクトを取得します。</p></li>
+<li><p>ResultSetオブジェクトとJdbcToArrowConfigオブジェクトからArrow処理用のイテレータ(sqlToArrowVectorIterator)を取得します。</p></li>
+<li><p>イテレータのnext()メソッドで上記設定した分割取得件数分のデータ取得がなされます。</p></li>
+<li><p>pyarrow.jvmのrecord_batch()メソッドでPython上にRecordBatchオブジェクトを生成します。</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result_set</span> <span class="o">=</span> <span class="n">curs</span><span class="o">.</span><span class="n">resultSet</span>
+
+<span class="n">it</span> <span class="o">=</span> <span class="n">JdbcToArrow</span><span class="o">.</span><span class="n">sqlToArrowVectorIterator</span><span class="p">(</span><span class="n">result_set</span><span class="p">,</span> <span class="n">pyarrow_jdbc_config</span><span class="p">)</span>
+<span class="k">while</span> <span class="n">it</span><span class="o">.</span><span class="n">hasNext</span><span class="p">():</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">it</span><span class="o">.</span><span class="n">next</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">root</span><span class="o">.</span><span class="n">getRowCount</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">break</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">pyarrow</span><span class="o">.</span><span class="n">jvm</span><span class="o">.</span><span class="n">record_batch</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>サンプルコードはsampleArrowIterator.pyをご参照ください。</p>
+</section>
+</section>
+</div>
+</section>
+<section id="id1">
+<h1>付録<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<span id="document-dbapi2"></span><section id="jpype-dbapi2api">
+<h2>JPype DBAPI2のAPIリファレンス<a class="headerlink" href="#jpype-dbapi2api" title="Link to this heading">¶</a></h2>
+<section id="constructors">
+<h3><cite>Constructors</cite><a class="headerlink" href="#constructors" title="Link to this heading">¶</a></h3>
+<dl class="py function" id="connect">
+<dt class="sig sig-object py" id="dbapi2.connect">
+<span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dsn</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">driver</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">driver_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.connect" title="Link to this definition">¶</a></dt>
+<dd><p>データベースへの接続を作成します。</p>
+<dl>
+<dt>パラメータ:【JPype DBAPI2仕様】</dt><dd><p>dsn (str): JDBC のデータベース接続文字列(URL)。</p>
+<p>driver (str, optional): ロードする JDBC ドライバ。&quot;com.toshiba.mwcloud.gs.sql.Driver&quot;を指定してください。【GridDB仕様】</p>
+<p>driver_args (dict): ドライバへの引数。</p>
+</dd>
+<dt>例外:</dt><dd><p>接続を確立できない場合はエラーになります。</p>
+</dd>
+<dt>戻り値:</dt><dd><p>成功した場合、新しいConnectionオブジェクトを返します。</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="globals">
+<h3>Globals<a class="headerlink" href="#globals" title="Link to this heading">¶</a></h3>
+<p>JPype dbapi2 は、モジュールの動作を定義するいくつかのグローバルを定義します。
+これらの値は定数です。</p>
+<dl class="simple" id="apilevel">
+<dt><a class="reference internal" href="#apilevel">apilevel</a></dt><dd><p>モジュールのapilevelは「2.0」です。</p>
+</dd>
+</dl>
+<dl id="threadsafety">
+<dt><a class="reference internal" href="#threadsafety">threadsafety</a></dt><dd><p>threadsafetyのレベルは 2 で、「スレッドはModuleとConnectionを共有してもよい」
+という意味です。ただし、実際のレベルは、JDBC が接続されているドライバの
+実装によって異なります。</p>
+<p>GridDBのJDBCドライバでは、Moduleを共有できますが、Connectionを共有することは
+できません。【GridDB仕様】
+Connectionを作成したスレッド以外のスレッドで、そのConnectionを使用しようとすると、
+エラーが発生します。</p>
+<p>上記のコンテキストでの共有とは、2 つのスレッドが、リソース ロックを実装する
+ためにミューテックス セマフォを使用してリソースをラップすることなく、リソースを
+使用できることを意味します。ミューテックスを使用してアクセスを管理しても、
+外部リソースを常にスレッド セーフにできるわけではないことに注意してください。
+リソースは、制御できないグローバル変数やその他の外部ソースに依存している
+可能性があります。</p>
+</dd>
+</dl>
+<dl id="paramstyle">
+<dt><a class="reference internal" href="#paramstyle">paramstyle</a></dt><dd><p>JPype dbapi2モジュールのparamstyleは「qmark」です。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>paramstyle</p></th>
+<th class="head"><p>意味</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qmark</span></code></p></td>
+<td><p>Question mark style, 例) <code class="docutils literal notranslate"><span class="pre">...WHERE</span> <span class="pre">name=?</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</dd>
+</dl>
+</section>
+</section>
+<section id="connection-objects">
+<span id="connection"></span><h2><a class="reference internal" href="#connection-objects">Connection Objects</a><a class="headerlink" href="#connection-objects" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="dbapi2.Connection">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">Connection</span></span><a class="headerlink" href="#dbapi2.Connection" title="Link to this definition">¶</a></dt>
+<dd><p>接続により、JDBC データベースへのアクセスが提供されます。</p>
+<p>接続は管理され、Python の with ステートメントの一部として使用できます。
+接続は、ガベージ コレクションされたとき、with ステートメントのスコープ
+の終了時、または手動で閉じられたときに自動的に閉じられます。
+接続が閉じられると、データベースを使用するすべての操作でエラーが発生します。</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Connection.autocommit">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">autocommit</span></span><a class="headerlink" href="#dbapi2.Connection.autocommit" title="Link to this definition">¶</a></dt>
+<dd><p>自動コミット動作を制御するプロパティ。【JPype DBAPI2仕様】</p>
+<p>True/Falseの設定操作は可能ですが変更はできません。常にTrueを返します。【GridDB仕様】</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Connection.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Connection.close" title="Link to this definition">¶</a></dt>
+<dd><p>(.__del__() が呼び出されるたびにではなく、)すぐに接続を閉じます。</p>
+<p>この時点から接続は使用できなくなります。
+接続で何らかの操作を行おうとすると、Error (またはサブクラス) 例外が発生します。
+接続を使用しようとしているすべてのカーソルオブジェクトにも同じことが適用されます。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Connection.commit">
+<span class="sig-name descname"><span class="pre">commit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Connection.commit" title="Link to this definition">¶</a></dt>
+<dd><p>コミット</p>
+<p>未サポートです。実行するとエラーになります。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Connection.connection">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">connection</span></span><a class="headerlink" href="#dbapi2.Connection.connection" title="Link to this definition">¶</a></dt>
+<dd><p>この Python Connectionオブジェクトをサポートする JDBC Connectionオブジェクトを取得します。【JPype DBAPI2仕様】</p>
+<p>これを使用して、DBAPIドライバの範囲外にある追加のメタデータやその他の機能を取得できます。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Connection.cursor">
+<span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Connection.cursor" title="Link to this definition">¶</a></dt>
+<dd><p>新しいカーソル オブジェクトを返します。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Connection.rollback">
+<span class="sig-name descname"><span class="pre">rollback</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Connection.rollback" title="Link to this definition">¶</a></dt>
+<dd><p>ロールバック</p>
+<p>未サポートです。実行するとエラーになります。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Connection.typeinfo">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">typeinfo</span></span><a class="headerlink" href="#dbapi2.Connection.typeinfo" title="Link to this definition">¶</a></dt>
+<dd><p>このドライバでサポートされているタイプのリスト。【JPype DBAPI2仕様】</p>
+<p>これはドライバの機能を確認するのに役立ちます。</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="cursor-objects">
+<span id="cursor"></span><h2><a class="reference internal" href="#cursor-objects">Cursor Objects</a><a class="headerlink" href="#cursor-objects" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="dbapi2.Cursor">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">Cursor</span></span><a class="headerlink" href="#dbapi2.Cursor" title="Link to this definition">¶</a></dt>
+<dd><p>カーソルはクエリを実行し、結果を取得するために使用されます。</p>
+<p>一部は PreparedStatement、一部は ResultSet で、カーソルは両方の組み合わせです。
+JDBCのresultSetオブジェクトには resultSetプロパティでアクセスできます。</p>
+<p>カーソルは管理され、Python の with ステートメントの一部として使用できます。
+カーソルは、ガベージ コレクションされたとき、with ステートメントのスコープの終了時、
+または手動で閉じられたときに自動的に閉じます。
+カーソルが閉じられると、データベースを使用するすべての操作でエラーが発生します。</p>
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.arraysize">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">arraysize</span></span><a class="headerlink" href="#dbapi2.Cursor.arraysize" title="Link to this definition">¶</a></dt>
+<dd><p>.fetchmany()メソッドで取得する行数を指定します。</p>
+<p>この読み取り/書き込み属性は、.fetchmany()メソッドで一度に取得する行数を指定します。
+デフォルトでは1に設定され、一度に1行取得することを意味します。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.callproc">
+<span class="sig-name descname"><span class="pre">callproc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">procname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.callproc" title="Link to this definition">¶</a></dt>
+<dd><p>ストアド プロシージャを呼び出します。</p>
+<p>未サポートです。実行するとエラーになります。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.close" title="Link to this definition">¶</a></dt>
+<dd><p>(__del__ が呼び出されるたびに閉じるのではなく、)すぐにカーソルを閉じます。</p>
+<p>この時点からカーソルは使用できなくなります。
+カーソルを使用して何らかの操作を行おうとすると、Error (またはサブクラス) 例外が発生します。</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.description">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">description</span></span><a class="headerlink" href="#dbapi2.Cursor.description" title="Link to this definition">¶</a></dt>
+<dd><p>[読み取り専用属性] descriptionは7項目のシーケンスのシーケンスです。【JPype DBAPI2仕様】</p>
+<p>これらの各シーケンスには、1 つの結果列を記述する情報が含まれています。</p>
+<ul class="simple">
+<li><p>名前(name):列名</p></li>
+<li><p>タイプコード(type_code):列のデータ型</p></li>
+<li><p>表示サイズ(display_size):常に131072【GridDB仕様】</p></li>
+<li><p>内部サイズ(internal_size):常に131072【GridDB仕様】</p></li>
+<li><p>精度(precision):TIMESTAMP型の場合は3(ミリ秒精度)または6(マイクロ秒精度)または9(ナノ秒精度)、他の型の場合は0【GridDB仕様】</p></li>
+<li><p>スケール(scale):常に0【GridDB仕様】</p></li>
+<li><p>isNullable(null_ok):カラムにNULL値を許可する定数ResultSetMetaData.columnNullable(=1)、またはカラムにNULL値を許可しない定数columnNoNulls(=0)【GridDB仕様】</p></li>
+</ul>
+<p>これは、最後のクエリによって結果セット(ResultSet)が生成された場合にのみ使用できます。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.execute">
+<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">operation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.execute" title="Link to this definition">¶</a></dt>
+<dd><p>データベース操作 (クエリまたはコマンド) を準備して実行します。</p>
+<p>パラメータはシーケンスとして提供され、操作内の変数にバインドされます。
+変数は qmark 表記、すなわち「?」記号で指定されます。【JPype DBAPI2仕様】
+JDBC はマッピング スタイルのパラメータをサポートしていません。</p>
+<p>ステートメントを実行すると行数が更新されます。ステートメントに結果セットがない場合、
+行数は -1 になります。ステートメントは複数の結果セットを生成する場合があります。
+複数の結果セットを走査するには、nextset()メソッドを使用します。</p>
+<dl>
+<dt>パラメータ:</dt><dd><p>operation (str): 実行されるステートメント。</p>
+<p>parameters (list, optional): ステートメントのパラメータのリスト。
+パラメータの数はステートメントで要求される数と一致する必要があります。
+一致しない場合はエラーが発生します。</p>
+</dd>
+<dt>返り値:</dt><dd><p>このカーソル。</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.executemany">
+<span class="sig-name descname"><span class="pre">executemany</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">operation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seq_of_parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.executemany" title="Link to this definition">¶</a></dt>
+<dd><p>データベース操作 (クエリまたはコマンド) を準備し、
+シーケンス seq_of_parameters で見つかったすべてのパラメータシーケンス
+またはマッピングに対してそれを実行します。</p>
+<p>.execute() と同じコメントがこのメソッドにも適用されます。</p>
+<dl>
+<dt>パラメータ:</dt><dd><p>operation (str): 実行されるステートメント。</p>
+<p>seq_of_parameters (list, optional): ステートメントのパラメータのリストのリスト。
+パラメータの数は、ステートメントで要求される数と一致する必要があります。
+一致しない場合は、エラーが発生します。</p>
+</dd>
+<dt>返り値:</dt><dd><p>このカーソル。</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.fetchall">
+<span class="sig-name descname"><span class="pre">fetchall</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.fetchall" title="Link to this definition">¶</a></dt>
+<dd><p>クエリ結果のすべての（残りの）行を取得し、
+それらをシーケンスのシーケンス（タプルのリストなど）として返します。
+カーソルの arraysize 属性がこの操作のパフォーマンスに影響を与える
+可能性があることに注意してください。</p>
+<p>前回の.execute*()呼び出しで結果セットが生成されなかった場合、
+またはまだ呼び出しが発行されていない場合は、エラー (またはサブクラス) 例外が発生します 。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.fetchmany">
+<span class="sig-name descname"><span class="pre">fetchmany</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.fetchmany" title="Link to this definition">¶</a></dt>
+<dd><p>複数の結果を取得します。</p>
+<p>クエリ結果の次の行セットを取得し、シーケンスのシーケンス (タプルのリストなど) を返します。
+使用可能な行がなくなった場合は、空のシーケンスが返されます。</p>
+<p>呼び出しごとに取得する行数はsizeパラメータで指定します。
+指定しない場合は、カーソルのarraysize属性によって取得する行数が決定されます。
+メソッドは、sizeパラメータで指定された行数をできるだけ多く取得しようとします。
+指定された行数が利用できないために取得できない場合は、返される行数が少なくなる場合があります。</p>
+<p>前回の.execute*()呼び出しで結果セットが生成されなかった場合、
+またはまだ呼び出しが発行されていない場合は、エラー (またはサブクラス) 例外が発生します 。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.fetchone">
+<span class="sig-name descname"><span class="pre">fetchone</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.fetchone" title="Link to this definition">¶</a></dt>
+<dd><p>クエリ結果セットの次の行を取得し、単一のシーケンスを返します。
+データがなくなった場合は None を返します。</p>
+<p>.execute*() への以前の呼び出しで結果セットが生成されなかった場合、
+またはまだ呼び出しが発行されていなかった場合は、
+エラー (またはサブクラス) 例外が発生します。</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.lastrowid">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">lastrowid</span></span><a class="headerlink" href="#dbapi2.Cursor.lastrowid" title="Link to this definition">¶</a></dt>
+<dd><p>最後に挿入された行の ID を取得します。</p>
+<p>未サポートです。実行するとエラーになります。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.nextset">
+<span class="sig-name descname"><span class="pre">nextset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.nextset" title="Link to this definition">¶</a></dt>
+<dd><p>このカーソル内の次の結果セットを取得します。</p>
+<p>未サポートです。常にNoneを返します。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.parameters">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">parameters</span></span><a class="headerlink" href="#dbapi2.Cursor.parameters" title="Link to this definition">¶</a></dt>
+<dd><p>[読み取り専用属性] parametersは6項目のシーケンスのシーケンスです。【JPype DBAPI2仕様】</p>
+<p>これらの各シーケンスには、1 つの結果列を記述する情報が含まれています。
+現GridDBでは全て常に同じ値を返します。【GridDB仕様】</p>
+<ul class="simple">
+<li><p>タイプ名(type_name):常に&quot;UNKNOWN&quot;【GridDB仕様】</p></li>
+<li><p>JDBCタイプ(jdbc_type):常にOTHER【GridDB仕様】</p></li>
+<li><p>パラメータモード(parameter_mode) (1=入力、2=入力/出力、4=出力): 常に1【GridDB仕様】</p></li>
+<li><p>精度(precision): 常に0【GridDB仕様】</p></li>
+<li><p>スケール(scale): 常に0【GridDB仕様】</p></li>
+<li><p>isNullable(null_ok): 常に1【GridDB仕様】</p></li>
+</ul>
+<p>これは、execute の後にのみ使用できます。【GridDB仕様】</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.resultSet">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">resultSet</span></span><a class="headerlink" href="#dbapi2.Cursor.resultSet" title="Link to this definition">¶</a></dt>
+<dd><p>[読み取り専用属性] JDBCのResultSetオブジェクトを取得します。【JPype DBAPI2仕様】</p>
+<p>オブジェクトは、次の``execute*()``メソッド呼び出し時に閉じられます</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="dbapi2.Cursor.rowcount">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">rowcount</span></span><a class="headerlink" href="#dbapi2.Cursor.rowcount" title="Link to this definition">¶</a></dt>
+<dd><p>[読み取り専用属性] UPDATE や INSERT などの DML ステートメントの場合に、
+最後の .execute*() が影響を与えた行数を返します。【JPype DBAPI2仕様】</p>
+<p>カーソルに対して .execute*() が実行されていない場合、
+または最後の操作の行数がインターフェイスによって判別できない場合、
+属性は -1 になります。JDBC は SELECT から返される行数の取得をサポートしていないため、
+SELECT ステートメントの後の行数は -1 になります。</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.setinputsizes">
+<span class="sig-name descname"><span class="pre">setinputsizes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sizes</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.setinputsizes" title="Link to this definition">¶</a></dt>
+<dd><p>これは、.execute*() を呼び出す前に使用して、
+操作のパラメータのメモリ領域を事前に定義できます。</p>
+<p>サイズはシーケンスとして指定されます。つまり、入力パラメータごとに1つの項目です。
+項目は、使用される入力に対応する Type Object であるか、
+文字列パラメータの最大長を指定する整数である必要があります。
+項目が None の場合、その列に対して事前定義されたメモリ領域は予約されません
+(これは、大きな入力に対して事前定義された領域を回避するのに役立ちます)。</p>
+<p>このメソッドは、.execute*() メソッドが呼び出される前に使用されます。</p>
+<p>(未実装)【JPype DBAPI2仕様】</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dbapi2.Cursor.setoutputsize">
+<span class="sig-name descname"><span class="pre">setoutputsize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">column</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Cursor.setoutputsize" title="Link to this definition">¶</a></dt>
+<dd><p>大きな列 (LONG、BLOB など) のフェッチ用の列バッファ サイズを設定します。</p>
+<p>列は結果シーケンスのインデックスとして指定されます。
+列を指定しないと、カーソル内のすべての大きな列のデフォルト サイズが設定されます。</p>
+<p>(未実装)【JPype DBAPI2仕様】</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="sql-type-constructor">
+<h2><a class="reference internal" href="#sql-type-constructor">SQL Type Constructor</a><a class="headerlink" href="#sql-type-constructor" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="dbapi2.Timestamp">
+<span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">Timestamp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">year</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hour</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minute</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nano</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Timestamp" title="Link to this definition">¶</a></dt>
+<dd><p>この関数は、タイムスタンプ値を保持するオブジェクトを生成します。</p>
+<p>ナノ秒精度の値を指定できます。【JPype DBAPI2仕様】</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dbapi2.TimestampFromTicks">
+<span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">TimestampFromTicks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ticks</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.TimestampFromTicks" title="Link to this definition">¶</a></dt>
+<dd><p>この関数は、指定された ticks 値 (エポックからの秒数) から
+タイムスタンプ値を保持するオブジェクトを生成します。</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dbapi2.Binary">
+<span class="sig-prename descclassname"><span class="pre">dbapi2.</span></span><span class="sig-name descname"><span class="pre">Binary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#dbapi2.Binary" title="Link to this definition">¶</a></dt>
+<dd><p>この関数は、バイナリ (長い) 文字列値を保持できるオブジェクトを生成します。</p>
+</dd></dl>
+
+</section>
+<span id="document-mapping"></span><section id="id1">
+<h2>データ型の対応関係<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<section id="jpype-dbapi2">
+<span id="getter"></span><h3>JPype DBAPI2 データ取得時<a class="headerlink" href="#jpype-dbapi2" title="Link to this heading">¶</a></h3>
+<p>各GridDB TypeがPython上で取得されるデータ型との対応関係を示します。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>GridDB Type</p></th>
+<th class="head"><p>fetchxxx()メソッドで取得されるデータ型</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>STRING</p></td>
+<td><p>str</p></td>
+</tr>
+<tr class="row-odd"><td><p>BOOL</p></td>
+<td><p>bool</p></td>
+</tr>
+<tr class="row-even"><td><p>BYTE</p></td>
+<td><p>JShort</p></td>
+</tr>
+<tr class="row-odd"><td><p>SHORT</p></td>
+<td><p>JShort</p></td>
+</tr>
+<tr class="row-even"><td><p>INTEGER</p></td>
+<td><p>JInt</p></td>
+</tr>
+<tr class="row-odd"><td><p>LONG</p></td>
+<td><p>JLong</p></td>
+</tr>
+<tr class="row-even"><td><p>FLOAT</p></td>
+<td><p>JDouble</p></td>
+</tr>
+<tr class="row-odd"><td><p>DOUBLE</p></td>
+<td><p>JDouble</p></td>
+</tr>
+<tr class="row-even"><td><p>TIMESTAMP</p></td>
+<td><p>datetime.datetime</p></td>
+</tr>
+<tr class="row-odd"><td><p>BLOB</p></td>
+<td><p>bytes</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>JXXX型はJavaのデータ型をラッピングしたデータ型です。</p></li>
+<li><p>日時を扱うデータ型では、タイムゾーンはOS等の設定に従います。</p></li>
+<li><p>TIMESTAMP型はマイクロ秒精度のdatetime.datetime型で取得されるため、
+ナノ秒精度のTIMESTAMP型を利用している場合はナノ秒部分がカットされます。
+ナノ秒精度でデータを取得したい場合は応用編をご参照ください。</p></li>
+<li><p>GridDB Typeが空間型(GEOMETRY)もしくは配列型の場合はNoneを返します。</p></li>
+</ul>
+</section>
+<section id="setter">
+<span id="id2"></span><h3>JPype DBAPI2 データ設定時<a class="headerlink" href="#setter" title="Link to this heading">¶</a></h3>
+<p>Python上で入力するデータ型とデータ設定可能なGridDB Typeとの対応関係を
+示します。</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p>入力データ型</p></td>
+<td><p>入力データの作成例</p></td>
+<td><p>STRING</p></td>
+<td><p>BOOL</p></td>
+<td><p>BYTE</p></td>
+<td><p>SHORT</p></td>
+<td><p>INTEGER</p></td>
+<td><p>LONG</p></td>
+<td><p>FLOAT</p></td>
+<td><p>DOUBLE</p></td>
+<td><p>TIMESTAMP</p></td>
+<td><p>BLOB</p></td>
+</tr>
+<tr class="row-even"><td><p>str</p></td>
+<td><p>v = str('ABC')</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>JString</p></td>
+<td><p>v = jpype.JString('ABC')</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>bool</p></td>
+<td><p>v = bool(True)</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>JBoolean</p></td>
+<td><p>v = jpype.JBoolean(True)</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>int</p></td>
+<td><p>v = int(100)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>JByte</p></td>
+<td><p>v = jpype.JByte(100)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>JShort</p></td>
+<td><p>v = jpype.JShort(100)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>JInt</p></td>
+<td><p>v = jpype.JInt(100)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>JLong</p></td>
+<td><p>v = jpype.JLong(100)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>float</p></td>
+<td><p>v = float(100.12)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>JFloat</p></td>
+<td><p>v = jpype.JFloat(100.12)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>JDouble</p></td>
+<td><p>v = jpype.JDouble(100.12)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>datetime</p></td>
+<td><p>v = datetime.datetime(2024,9,3,10,55,45)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>Timestamp</p></td>
+<td><p>v = jpype.dbapi2.Timestamp(2024,9,3,10,55,45)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>TimestampFromTicks</p></td>
+<td><p>v = jpype.dbapi2.TimestampFromTicks(3600)</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>〇</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-odd"><td><p>bytes</p></td>
+<td><p>v = 'abc'.encode()</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+<tr class="row-even"><td><p>Binary</p></td>
+<td><p>v = jpype.dbapi2.Binary('abc'.encode())</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+<td><p>×</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>〇はデータ設定できるケースがある場合、×は設定できないことを意味します。
+〇であっても、値を保持できる範囲の違いにより、エラーになる場合や値が丸められる場合があります。</p></li>
+<li><p>JByte型はどのGridDB Typeにもデータ設定できません。</p></li>
+<li><p>日時を扱うデータ型では、タイムゾーンはOS等の設定に従います。</p></li>
+<li><p>datetime型ではマイクロ秒精度に制限されますが、Timestamp型を使うと、ナノ秒精度のデータを設定できます。</p></li>
+<li><p>bytes型/BINARY型はどのGridDB Typeにもデータ設定できませんが、応用編に記載のカスタマイズ機能を使うことで、BLOB型にデータ設定できるようになります。</p></li>
+<li><p>GridDB Typeが空間型(GEOMETRY)もしくは配列型へのデータ設定はできません。</p></li>
+</ul>
+</section>
+<section id="apache-arrow">
+<h3>Apache Arrow データ取得時<a class="headerlink" href="#apache-arrow" title="Link to this heading">¶</a></h3>
+<p>各GridDB Typeはpyarrowの配列のデータ型で取得されます。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>GridDB Type</p></th>
+<th class="head"><p>pyarrowで取得されるデータ型</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>STRING</p></td>
+<td><p>pyarrow.lib.StringArray</p></td>
+</tr>
+<tr class="row-odd"><td><p>BOOL</p></td>
+<td><p>pyarrow.lib.BooleanArray</p></td>
+</tr>
+<tr class="row-even"><td><p>BYTE</p></td>
+<td><p>pyarrow.lib.Int8Array</p></td>
+</tr>
+<tr class="row-odd"><td><p>SHORT</p></td>
+<td><p>pyarrow.lib.Int16Array</p></td>
+</tr>
+<tr class="row-even"><td><p>INTEGER</p></td>
+<td><p>pyarrow.lib.Int32Array</p></td>
+</tr>
+<tr class="row-odd"><td><p>LONG</p></td>
+<td><p>pyarrow.lib.Int64Array</p></td>
+</tr>
+<tr class="row-even"><td><p>FLOAT</p></td>
+<td><p>pyarrow.lib.FloatArray</p></td>
+</tr>
+<tr class="row-odd"><td><p>DOUBLE</p></td>
+<td><p>pyarrow.lib.DoubleArray</p></td>
+</tr>
+<tr class="row-even"><td><p>TIMESTAMP</p></td>
+<td><p>pyarrow.lib.TimestampArray</p></td>
+</tr>
+<tr class="row-odd"><td><p>BLOB</p></td>
+<td><p>pyarrow.lib.BinaryArray</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>取得対象に空間型(GEOMETRY)もしくは配列型を含む場合はエラーとなります。</p></li>
+</ul>
+</section>
+</section>
+<span id="document-samples"></span><section id="id1">
+<h2>サンプルコード一覧<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<p>サンプルコードの一覧は以下の通りです。</p>
+<section id="id2">
+<h3>基本編<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ファイル名</p></th>
+<th class="head"><p>概要</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>sampleSimple.py</p></td>
+<td><p>単純なSQLの実行例</p></td>
+</tr>
+<tr class="row-odd"><td><p>sampleParametered.py</p></td>
+<td><p>execute()によるプレースホルダ付きSQLの実行例</p></td>
+</tr>
+<tr class="row-even"><td><p>sampleMany.py</p></td>
+<td><p>executemany()によるプレースホルダ付きSQLの実行例</p></td>
+</tr>
+<tr class="row-odd"><td><p>sampleTypes.py</p></td>
+<td><p>数値/BOOL型の例</p></td>
+</tr>
+<tr class="row-even"><td><p>sampleTimestamp.py</p></td>
+<td><p>TIMESTAMP型の例</p></td>
+</tr>
+<tr class="row-odd"><td><p>sampleTimestamp2.py</p></td>
+<td><p>TIMESTAMP型(マイクロ秒/ナノ秒精度)の例</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id3">
+<h3>応用編<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ファイル名</p></th>
+<th class="head"><p>概要</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>sampleTimestamp2-Nano.py</p></td>
+<td><p>TIMESTAMP型のナノ秒精度でのデータ取得の例</p></td>
+</tr>
+<tr class="row-odd"><td><p>sampleTypes-IntFloat.py</p></td>
+<td><p>Pythonのint/float型でのデータ取得の例</p></td>
+</tr>
+<tr class="row-even"><td><p>sampleBlob.py</p></td>
+<td><p>BLOB型のデータ設定の例</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id4">
+<h3>結果取得の高速化<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>ファイル名</p></th>
+<th class="head"><p>概要</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>sampleArrowIteratorAll.py</p></td>
+<td><p>全件一括取得の例</p></td>
+</tr>
+<tr class="row-odd"><td><p>sampleArrowIterator.py</p></td>
+<td><p>全件分割取得の例</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</div>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="#">目次</a></h3>
+    <ul>
+<li class="toctree-l1"><a class="reference internal" href="#document-intro">はじめに</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id2">動作環境</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id3">クライアント側の動作に必要なソフト</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#document-dbapi2-basic">基本編</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id2">基本操作</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id3">事前処理</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id4">接続</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="index.html#url">接続時のURL形式</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#id5">その他情報の設定</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#sql">SQLの実行</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id6">検索結果の取得</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id7">その他</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id8">制限事項</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#document-dbapi2-custom">応用編</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#timestamp">TIMESTAMP型のナノ秒精度でのデータ取得</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#pythonint-float">Pythonのint/float型でのデータ取得</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#blob">BLOB型のデータ設定</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#document-arrow">結果取得の高速化</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id2">全件一括取得</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id3">全件分割取得</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="#document-dbapi2">JPype DBAPI2のAPIリファレンス</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#constructors"><cite>Constructors</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.connect"><code class="docutils literal notranslate"><span class="pre">connect()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#globals">Globals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#connection-objects">Connection Objects</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#dbapi2.Connection"><code class="docutils literal notranslate"><span class="pre">Connection</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.autocommit"><code class="docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.close"><code class="docutils literal notranslate"><span class="pre">Connection.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.commit"><code class="docutils literal notranslate"><span class="pre">Connection.commit()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.connection"><code class="docutils literal notranslate"><span class="pre">Connection.connection</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.cursor"><code class="docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.rollback"><code class="docutils literal notranslate"><span class="pre">Connection.rollback()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Connection.typeinfo"><code class="docutils literal notranslate"><span class="pre">Connection.typeinfo</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#cursor-objects">Cursor Objects</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#dbapi2.Cursor"><code class="docutils literal notranslate"><span class="pre">Cursor</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.arraysize"><code class="docutils literal notranslate"><span class="pre">Cursor.arraysize</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.callproc"><code class="docutils literal notranslate"><span class="pre">Cursor.callproc()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.close"><code class="docutils literal notranslate"><span class="pre">Cursor.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.description"><code class="docutils literal notranslate"><span class="pre">Cursor.description</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.execute"><code class="docutils literal notranslate"><span class="pre">Cursor.execute()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.executemany"><code class="docutils literal notranslate"><span class="pre">Cursor.executemany()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.fetchall"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.fetchmany"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.fetchone"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.lastrowid"><code class="docutils literal notranslate"><span class="pre">Cursor.lastrowid</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.nextset"><code class="docutils literal notranslate"><span class="pre">Cursor.nextset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.parameters"><code class="docutils literal notranslate"><span class="pre">Cursor.parameters</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.resultSet"><code class="docutils literal notranslate"><span class="pre">Cursor.resultSet</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.rowcount"><code class="docutils literal notranslate"><span class="pre">Cursor.rowcount</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.setinputsizes"><code class="docutils literal notranslate"><span class="pre">Cursor.setinputsizes()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#dbapi2.Cursor.setoutputsize"><code class="docutils literal notranslate"><span class="pre">Cursor.setoutputsize()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#sql-type-constructor">SQL Type Constructor</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#dbapi2.Timestamp"><code class="docutils literal notranslate"><span class="pre">Timestamp()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#dbapi2.TimestampFromTicks"><code class="docutils literal notranslate"><span class="pre">TimestampFromTicks()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#dbapi2.Binary"><code class="docutils literal notranslate"><span class="pre">Binary()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#document-mapping">データ型の対応関係</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#jpype-dbapi2">JPype DBAPI2 データ取得時</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#setter">JPype DBAPI2 データ設定時</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#apache-arrow">Apache Arrow データ取得時</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#document-samples">サンプルコード一覧</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id2">基本編</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id3">応用編</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#id4">結果取得の高速化</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>ナビゲーション</h3>
+      <ul>
+        <li class="nav-item nav-item-0"><a href="#">GridDB V5.7 ドキュメント</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">GridDB V5.7 ドキュメント</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; 著作権 2024, Toshiba Digital Solutions Corporation.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.4.7.
+    </div>
+  </body>
+</html>
