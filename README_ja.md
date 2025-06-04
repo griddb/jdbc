@@ -12,7 +12,7 @@ GridDBJBCドライバはSQLインタフェースを提供します。
 以下の環境でビルドとサンプルプログラムの実行を確認しています。
 
     OS: Ubuntu 22.04(x64)
-    GridDB server: V5.7 CE(Community Edition)
+    GridDB server: V5.8 CE(Community Edition)
 
 ## クイックスタート
 
