@@ -13,7 +13,7 @@ To download the precompiled jars, click on View all to see all versions of the d
 Building and program execution are checked in the environment below.
 
     OS: Ubuntu 22.04(x64)
-    GridDB server: V5.7 CE(Community Edition)
+    GridDB server: V5.8 CE(Community Edition)
 
 ## Quick start
 
